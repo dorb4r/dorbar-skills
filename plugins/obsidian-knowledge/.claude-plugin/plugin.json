@@ -1,0 +1,11 @@
+{
+  "name": "obsidian-knowledge",
+  "version": "0.1.0",
+  "description": "Manage project knowledge in an Obsidian vault — capture durable facts, decisions, and status for humans and agents.",
+  "author": {
+    "name": "Dor Bar",
+    "email": "dor.b4r@gmail.com"
+  },
+  "license": "MIT",
+  "keywords": ["obsidian", "knowledge-base", "second-brain", "notes", "planning"]
+}
