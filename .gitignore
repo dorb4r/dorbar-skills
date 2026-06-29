@@ -1,0 +1,5 @@
+node_modules/
+.DS_Store
+*.log
+.cc10x/
+.claude/settings.local.json

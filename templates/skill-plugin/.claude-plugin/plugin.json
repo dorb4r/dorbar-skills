@@ -1,0 +1,11 @@
+{
+  "name": "__NAME__",
+  "version": "0.1.0",
+  "description": "__DESCRIPTION__",
+  "author": {
+    "name": "Dor Bar",
+    "email": "dor.b4r@gmail.com"
+  },
+  "license": "MIT",
+  "keywords": []
+}

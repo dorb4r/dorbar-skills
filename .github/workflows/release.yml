@@ -1,0 +1,34 @@
+# Auto-release on push to main: derives per-plugin semver bumps from Conventional
+# Commits, updates manifests + CHANGELOGs, syncs marketplace.json, and tags.
+# Activates once this repo is pushed to GitHub. Safe to keep dormant locally.
+name: release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0      # full history + tags needed for version detection
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+      - name: Release
+        run: node tools/mkt.mjs release
+      - name: Push commits and tags
+        run: git push --follow-tags

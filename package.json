@@ -1,0 +1,22 @@
+{
+  "name": "dorbar-skills",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Dor Bar's Claude Code skills/plugins marketplace, shared across projects.",
+  "type": "module",
+  "bin": {
+    "mkt": "./bin/mkt"
+  },
+  "scripts": {
+    "mkt": "node tools/mkt.mjs",
+    "new": "node tools/mkt.mjs new",
+    "sync": "node tools/mkt.mjs sync",
+    "status": "node tools/mkt.mjs status",
+    "release": "node tools/mkt.mjs release",
+    "validate": "node tools/mkt.mjs validate"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT"
+}

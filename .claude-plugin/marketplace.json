@@ -1,0 +1,13 @@
+{
+  "name": "dorbar-skills",
+  "owner": {
+    "name": "Dor Bar",
+    "email": "dor.b4r@gmail.com"
+  },
+  "description": "Dor Bar's personal marketplace of Claude Code skills, plugins, and hooks shared across projects.",
+  "version": "0.1.0",
+  "metadata": {
+    "pluginRoot": "./plugins"
+  },
+  "plugins": []
+}
