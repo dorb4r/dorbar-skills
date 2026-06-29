@@ -6,13 +6,10 @@
   },
   "description": "Dor Bar's personal marketplace of Claude Code skills, plugins, and hooks shared across projects.",
   "version": "0.1.0",
-  "metadata": {
-    "pluginRoot": "./plugins"
-  },
   "plugins": [
     {
       "name": "obsidian-knowledge",
-      "source": "./obsidian-knowledge",
+      "source": "./plugins/obsidian-knowledge",
       "description": "Manage project knowledge in an Obsidian vault — capture durable facts, decisions, and status for humans and agents.",
       "version": "0.1.0",
       "author": {

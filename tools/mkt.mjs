@@ -115,7 +115,9 @@ function commitsTouching(dir, sinceTag) {
 function syncMarketplace({ quiet } = {}) {
   const mkt = readJSON(MARKETPLACE_PATH);
   const plugins = listPlugins().map(({ name, manifest }) => {
-    const entry = { name, source: `./${name}` };
+    // Explicit path from the marketplace root. Claude Code resolves a "./"-prefixed
+    // source against the marketplace root (NOT metadata.pluginRoot), so spell it out.
+    const entry = { name, source: `./plugins/${name}` };
     if (manifest.description) entry.description = manifest.description;
     if (manifest.version) entry.version = manifest.version;
     if (manifest.author) entry.author = manifest.author;
