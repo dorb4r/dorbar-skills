@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// mkt — marketplace toolkit for the dorbar-skills marketplace.
+// mkt - marketplace toolkit for the dorbar-skills marketplace.
 //
 // Subcommands:
 //   mkt new <name> [--bundle] [--skill <skill>] [--desc "..."]   scaffold a plugin
@@ -22,6 +22,7 @@ const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const PLUGINS_DIR = join(ROOT, "plugins");
 const TEMPLATES_DIR = join(ROOT, "templates");
 const MARKETPLACE_PATH = join(ROOT, ".claude-plugin", "marketplace.json");
+const PACKAGE_PATH = join(ROOT, "package.json");
 const ROOT_CHANGELOG = join(ROOT, "CHANGELOG.md");
 
 // ---------- tiny utils ----------
@@ -129,7 +130,7 @@ function syncMarketplace({ quiet } = {}) {
   });
   mkt.plugins = plugins;
   writeJSON(MARKETPLACE_PATH, mkt);
-  if (!quiet) console.log(c.grn("synced ") + `marketplace.json — ${plugins.length} plugin(s)`);
+  if (!quiet) console.log(c.grn("synced ") + `marketplace.json - ${plugins.length} plugin(s)`);
   return mkt;
 }
 
@@ -189,7 +190,7 @@ function replaceInFile(file, map) {
 
 function cmdStatus() {
   const plugins = listPlugins();
-  if (!plugins.length) { console.log(c.dim("no plugins yet — scaffold one with: mkt new <name>")); return; }
+  if (!plugins.length) { console.log(c.dim("no plugins yet - scaffold one with: mkt new <name>")); return; }
   console.log(c.bold("plugin".padEnd(28)) + c.bold("version".padEnd(12)) + c.bold("pending bump"));
   for (const p of plugins) {
     const tag = lastTagFor(p.name);
@@ -199,7 +200,7 @@ function cmdStatus() {
       : !tag ? c.yel("unreleased") + c.dim(` (${commits.length} commit(s))`)
       : level ? c.yel(level) + c.dim(` → ${bumpVer(p.manifest.version, level)}`) + c.dim(` (${commits.length} commit(s))`)
       : c.dim("none");
-    console.log((p.name).padEnd(28) + String(p.manifest.version || "—").padEnd(12) + note);
+    console.log((p.name).padEnd(28) + String(p.manifest.version || "-").padEnd(12) + note);
   }
 }
 
@@ -244,14 +245,15 @@ function cmdRelease(args) {
   let marketLevel = null;
   for (const ch of changes) if (!ch.baseline) marketLevel = maxLevel(marketLevel, ch.level);
 
-  const mkt = readJSON(MARKETPLACE_PATH);
-  const marketTo = marketLevel ? bumpVer(mkt.version, marketLevel) : mkt.version;
+  const packageManifest = readJSON(PACKAGE_PATH);
+  const marketFrom = packageManifest.version || "0.0.0";
+  const marketTo = marketLevel ? bumpVer(marketFrom, marketLevel) : marketFrom;
 
-  console.log(c.bold(flags["dry-run"] ? "DRY RUN — planned release:" : "Releasing:"));
+  console.log(c.bold(flags["dry-run"] ? "DRY RUN - planned release:" : "Releasing:"));
   for (const ch of changes) {
     console.log(`  ${ch.p.name.padEnd(26)} ${ch.from} → ${c.grn(ch.to)} ${ch.baseline ? c.dim("(baseline tag)") : c.dim(`(${ch.level})`)}`);
   }
-  if (marketLevel) console.log(`  ${"marketplace".padEnd(26)} ${mkt.version} → ${c.grn(marketTo)} ${c.dim(`(${marketLevel})`)}`);
+  if (marketLevel) console.log(`  ${"marketplace".padEnd(26)} ${marketFrom} → ${c.grn(marketTo)} ${c.dim(`(${marketLevel})`)}`);
 
   if (flags["dry-run"]) return;
 
@@ -263,8 +265,10 @@ function cmdRelease(args) {
       prependChangelog(join(ch.p.dir, "CHANGELOG.md"), ch.to, ch.lines, "Release.");
     }
   }
-  mkt.version = marketTo;
-  writeJSON(MARKETPLACE_PATH, mkt);
+  if (marketLevel) {
+    packageManifest.version = marketTo;
+    writeJSON(PACKAGE_PATH, packageManifest);
+  }
   syncMarketplace({ quiet: true });
   if (marketLevel) {
     const rootLines = changes.filter(c => !c.baseline).map(ch => `- **${ch.p.name}** ${ch.to} (${ch.level})`);
@@ -275,7 +279,7 @@ function cmdRelease(args) {
 
   const bumped = changes.filter(c => !c.baseline);
   if (bumped.length || marketLevel) {
-    // a baseline-only release writes no files, so there is nothing to commit — just tag.
+    // a baseline-only release writes no files, so there is nothing to commit - just tag.
     git(["add", "-A"]);
     const summary = bumped.map(c => `${c.p.name}@${c.to}`).join(", ");
     git(["commit", "-q", "-m", `chore(release): ${summary || "marketplace"}${marketLevel ? `; marketplace@${marketTo}` : ""}`]);
@@ -305,7 +309,7 @@ function cmdValidate() {
   } catch (e) {
     const msg = (e.stdout || "") + (e.stderr || "");
     if (msg.trim()) { console.error(c.red(msg.trim())); ok = false; }
-    else console.log(c.dim("(claude plugin validate unavailable — skipped deep validation)"));
+    else console.log(c.dim("(claude plugin validate unavailable - skipped deep validation)"));
   }
   console.log(ok ? c.grn("✓ validation passed") : c.red("✗ validation failed"));
   process.exit(ok ? 0 : 1);
@@ -344,7 +348,7 @@ function parseFlags(args) {
   return out;
 }
 
-const HELP = `mkt — dorbar-skills marketplace toolkit
+const HELP = `mkt - dorbar-skills marketplace toolkit
 
   mkt new <name> [--bundle] [--skill <skill>] [--desc "..."]   scaffold a plugin
   mkt sync                                                     regenerate marketplace.json from manifests
