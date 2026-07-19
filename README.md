@@ -1,6 +1,6 @@
 # dorbar-skills
 
-A personal [Claude Code plugin marketplace](https://code.claude.com/docs/en/plugin-marketplaces) —
+A personal [Claude Code plugin marketplace](https://code.claude.com/docs/en/plugin-marketplaces) -
 a shared catalog of skills, agents, hooks, and MCP servers I can install across all my projects.
 Private for now; publishable later by pushing to a public git host.
 
@@ -9,7 +9,7 @@ Private for now; publishable later by pushing to a public git host.
 ```
 dorbar-skills/
 ├── .claude-plugin/
-│   └── marketplace.json     # the catalog (name, owner, version, plugins[]) — GENERATED, don't hand-edit plugins[]
+│   └── marketplace.json     # the catalog (name, owner, plugins[]) - GENERATED, don't hand-edit plugins[]
 ├── plugins/                 # one directory per plugin (the source of truth)
 │   └── <plugin>/
 │       ├── .claude-plugin/plugin.json   # name, version, description, author…
@@ -25,15 +25,15 @@ dorbar-skills/
 ```
 
 A **plugin** is the unit Claude Code installs and versions. A plugin can be:
-- **Standalone** — one skill, its own version. (`mkt new my-skill`)
-- **A bundle** — several related skills/agents/hooks sharing one version. (`mkt new dev-kit --bundle`)
+- **Standalone** - one skill, its own version. (`mkt new my-skill`)
+- **A bundle** - several related skills/agents/hooks sharing one version. (`mkt new dev-kit --bundle`)
 
 Skills are namespaced by plugin: a skill `foo` in plugin `bar` is invoked as `/bar:foo`.
 
 ## The `mkt` toolkit
 
 `plugin.json` is the source of truth. `marketplace.json`'s `plugins[]` is **generated** from
-the plugin manifests — never edit it by hand; run `mkt sync` (or any command that syncs).
+the plugin manifests - never edit it by hand; run `mkt sync` (or any command that syncs).
 
 ```sh
 ./bin/mkt new <name> [--bundle] [--skill <skill>] [--desc "..."]   # scaffold a plugin
@@ -51,9 +51,9 @@ the plugin manifests — never edit it by hand; run `mkt sync` (or any command t
 
 Two independent version axes, both SemVer:
 
-- **Per-plugin** — `version` in each `plugins/<name>/.claude-plugin/plugin.json`. This is the cache
+- **Per-plugin** - `version` in each `plugins/<name>/.claude-plugin/plugin.json`. This is the cache
   key Claude Code uses to decide whether an installed plugin has an update.
-- **Marketplace** — top-level `version` in `marketplace.json`. Bumped automatically to the highest
+- **Marketplace** - root `version` in `package.json`. Bumped automatically to the highest
   level of any plugin changed in a release.
 
 Bumps are derived from **[Conventional Commits](https://www.conventionalcommits.org/)** since each
@@ -86,3 +86,13 @@ The GitHub Actions workflow runs this automatically on every push to `main`.
 ```
 
 See [docs/AUTHORING.md](docs/AUTHORING.md) for how to add a new skill or migrate an existing one.
+
+## Plugins
+
+| Plugin | What it does |
+| --- | --- |
+| `obsidian-knowledge` | Manage project knowledge in an Obsidian vault. |
+| `hermes-tweet` | Hermes Agent X/Twitter plugin for Xquik read workflows and approval-gated actions. |
+
+Xquik is an independent third-party service. Not affiliated with X Corp.
+"Twitter" and "X" are trademarks of X Corp.
