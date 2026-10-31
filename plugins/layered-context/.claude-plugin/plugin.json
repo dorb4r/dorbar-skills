@@ -1,0 +1,18 @@
+{
+  "name": "layered-context",
+  "version": "0.1.0",
+  "description": "Scaffold a layered, agent-readable context architecture (ICM) onto a software project.",
+  "author": {
+    "name": "Dor Bar",
+    "email": "dor.b4r@gmail.com"
+  },
+  "license": "MIT",
+  "keywords": [
+    "context-engineering",
+    "ICM",
+    "CLAUDE.md",
+    "agent-architecture",
+    "scaffolding",
+    "sub-agents"
+  ]
+}
