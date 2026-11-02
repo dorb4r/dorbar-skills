@@ -1,7 +1,7 @@
 {
   "name": "multi-lens-review",
-  "version": "0.1.0",
-  "description": "Multi-lens code review of a PR or branch: parallel specialist reviewers (functionality, language, testing, data model, security, performance) and a master reviewer that verifies, dedupes and ranks into one report. Use when asked for a thorough, multi-perspective, or multi-agent code review.",
+  "version": "0.2.0",
+  "description": "Multi-lens code review of a PR or branch: parallel specialist reviewers (functionality, language, testing, data model, security, performance, simplicity, code architecture) and a master reviewer that verifies, dedupes and ranks into one report. Use when asked for a thorough, multi-perspective, or multi-agent code review.",
   "author": {
     "name": "Dor Bar",
     "email": "dor.b4r@gmail.com"
@@ -14,6 +14,8 @@
     "pull-request",
     "workflow",
     "layered-context",
-    "quality"
+    "quality",
+    "simplicity",
+    "architecture"
   ]
 }
