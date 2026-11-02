@@ -27,6 +27,26 @@
       "license": "MIT"
     },
     {
+      "name": "multi-lens-review",
+      "source": "./plugins/multi-lens-review",
+      "description": "Multi-lens code review of a PR or branch: parallel specialist reviewers (functionality, language, testing, data model, security, performance) and a master reviewer that verifies, dedupes and ranks into one report. Use when asked for a thorough, multi-perspective, or multi-agent code review.",
+      "version": "0.1.0",
+      "author": {
+        "name": "Dor Bar",
+        "email": "dor.b4r@gmail.com"
+      },
+      "keywords": [
+        "code-review",
+        "multi-agent",
+        "reviewers",
+        "pull-request",
+        "workflow",
+        "layered-context",
+        "quality"
+      ],
+      "license": "MIT"
+    },
+    {
       "name": "obsidian-knowledge",
       "source": "./plugins/obsidian-knowledge",
       "description": "Manage project knowledge in an Obsidian vault — capture durable facts, decisions, and status for humans and agents.",
