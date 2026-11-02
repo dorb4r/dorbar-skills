@@ -75,11 +75,14 @@ description), and **say in the report** that product context was thin.
 - Find the current task's plan in `runs/`, if one exists.
 
 ### 2. Run the review
-**If the `Workflow` tool is available, use it.** Run the bundled script with `args` from step 1:
+**If the `Workflow` tool is available, use it.** Read the bundled `workflow.js` (in this skill's
+base directory) and pass its **full text** as `script`, with `args` from step 1. Don't pass it as
+`scriptPath`: the tool refuses paths outside the working directory, and an installed plugin lives
+in the plugin cache. To run a subset of lenses, keep the script as is and set `args.lenses`.
 
 ```
 Workflow({
-  scriptPath: "<this skill's base directory>/workflow.js",
+  script: "<the full contents of workflow.js>",
   args: {
     repoPath: "/abs/path/to/checkout",          // required: read-only checkout of the head
     target: "PR #4 of org/repo (M1 backend)",   // required: one line, for the report
