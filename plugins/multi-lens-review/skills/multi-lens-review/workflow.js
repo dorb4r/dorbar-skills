@@ -1,6 +1,6 @@
 export const meta = {
   name: 'multi-lens-review',
-  description: 'Specialist reviewers in parallel (functionality, language, testing, data, security, performance), then a master reviewer verifies, dedupes and ranks into one report',
+  description: 'Specialist reviewers in parallel (functionality, language, testing, data, security, performance, simplicity, architecture), then a master reviewer verifies, dedupes and ranks into one report',
   whenToUse: 'Thorough review of a PR or branch. Pass args: repoPath, target, diffCmd (+ optional testCmd, stack, scopeDoc, lenses, extraLenses, notes).',
   phases: [
     { title: 'Review', detail: 'one read-only reviewer per lens, in parallel' },
@@ -68,6 +68,28 @@ Then check the change against it: requirements missing or contradicted, states/t
     title: 'Performance expert',
     prompt: `LENS: performance and runtime behaviour on the deploy target named in the repo's context. Connection handling and pooling (serverless + pooled databases, advisory locks), cold starts, HTTP client reuse and timeouts, N+1 and unbounded work, index coverage for expected queries, anything that grows per request with tenants or users. Only report issues with real impact at the product's expected scale, or a clear path to it.`,
   },
+  {
+    key: 'simplicity',
+    title: 'Simplicity (is it necessary?)',
+    prompt: `LENS: simplicity. Generated code tends to be too much code. Go over every added or changed line and ask "is this necessary?" and "can this be simpler?". Look for:
+- code nothing calls or needs yet: unused functions, parameters, options, config, branches; abstractions with one implementation that the plan does not ask for; "just in case" hooks for hypothetical futures;
+- defensive code for cases that cannot happen (checks the types or the callers already guarantee), and error handling that only rewraps;
+- wrappers and helpers that only forward to another call; layers of indirection a reader must hop through for no gain;
+- duplication: the same logic written twice in the change, or rewritten when the repo or a dependency (or the standard library) already does it. Name the existing thing to reuse;
+- verbose shapes with a shorter equivalent: long if/else chains that are a table, copy-pasted test bodies that are a table-driven test, comments that restate the code.
+Deliberate seams the repo's docs require (for example ports/adapters named in the area contracts or the plan) are not findings. For each finding say exactly what to delete, inline or merge, and roughly how many lines it saves. Rate blocker only when the extra code hides a bug; otherwise major (remove in this PR) or minor.`,
+  },
+  {
+    key: 'architecture',
+    title: 'Code architecture',
+    prompt: `LENS: code architecture. Load the intended structure from the repo first (CONTEXT.md, each touched area's CONTEXT.md contract, references/ standards or decisions), then check the change against it and against these rules:
+- separation of concerns: each module/package has ONE responsibility, stated in a sentence; domain logic does not know about HTTP, SQL, vendors or env; I/O stays at the edges;
+- dependency direction: inner layers (domain) never import outer ones (adapters, transport, storage); no import cycles; vendor types do not leak across a port;
+- each function does ONE thing at ONE level of abstraction: flag functions that parse + validate + persist + notify, or mix high-level flow with low-level detail. Name the pieces to split out;
+- code in the wrong place: logic in a handler or a tool that belongs in the domain, duplicated rules that should live in one owner, a package that has become a grab bag;
+- boundaries that later milestones in the plan will need, broken now.
+Do not ask for new layers or abstractions the change does not need; the simplicity lens pushes the other way. Each finding: the rule broken, where, and the concrete move (split X out of Y, move Z to package W).`,
+  },
 ]
 
 const wanted = A.lenses && A.lenses.length ? A.lenses : ALL_LENSES.map(l => l.key)
@@ -120,6 +142,7 @@ The change is checked out at ${A.repoPath} (diff: ${A.diffCmd}). READ-ONLY: no e
 Specialist reviewers (${done.map(r => r.lens).join(', ')}) produced the raw findings below.
 1. VERIFY every finding against the actual code: open the file and line, run a test if needed. Be skeptical. Drop anything wrong, speculative, out of scope (${A.scopeDoc || "the repo's current task plan"}), or already handled.
 2. MERGE duplicates across lenses into one item and note which lenses raised it.
+   When simplicity and architecture disagree (one says merge or delete, the other says split), decide: keep the separation only if the repo's docs require it or it removes a real mix of concerns; otherwise prefer less code. Say which way you went.
 3. RE-RATE severity: blocker = must fix before merge (bug, data-integrity or tenancy hole, security hole, contradiction with the product definition); major = fix in this PR (cheap now, expensive later); minor = fine as a written follow-up.
 4. Mark findings that are really PRODUCT DECISIONS for the owner (not bugs) as "needs a decision", with the options.
 5. Write ONE report in GitHub-flavoured markdown for the repo owner (plain and concrete; not everyone is an expert in every area):
@@ -130,6 +153,7 @@ Specialist reviewers (${done.map(r => r.lens).join(', ')}) produced the raw find
    - "Needs a decision": the product calls, each with options and a recommendation
    - "Dropped": each rejected finding with a one-line reason
    - one line per lens summarising what it found
+   - if the simplicity lens ran: the rough number of lines the confirmed simplicity findings would remove
 Return only the markdown report.
 
 Reviewers that returned nothing: ${missing.length ? missing.join(', ') : 'none'}.

@@ -3,13 +3,14 @@ name: multi-lens-review
 description: >-
   Thorough code review of a pull request or branch by several specialist reviewers working in
   parallel, each through one lens (functionality/product fit, language expert, testing, data
-  model, security, performance), followed by a master reviewer that verifies every finding
+  model, security, performance, simplicity, code architecture), followed by a master reviewer that verifies every finding
   against the code, merges duplicates, re-rates severity and returns ONE ranked report. The
   functionality reviewer takes its product context from the target repo itself (layered context:
   CLAUDE.md, CONTEXT.md, references/, runs/), so the skill works on any system. Use when asked
   for a thorough, deep, multi-perspective, multi-agent or "send several reviewers" code review of
   a PR, branch or diff. Triggers: multi-lens review, review this PR thoroughly, several
-  reviewers, specialist reviewers, review agents, master reviewer, deep code review.
+  reviewers, specialist reviewers, review agents, master reviewer, deep code review, is this
+  code necessary, simplify, too much code, duplication, separation of concerns.
 ---
 
 # Multi-lens review
@@ -36,6 +37,12 @@ Why this shape:
 | **Data model** | Schema and persistence: constraints, tenancy or ownership boundaries, nullability, indexes against the queries that will run, migrations up and down, money and time types. | Migrations, models and the queries in the diff. |
 | **Security** | Secrets handling, injection (SQL, URL, path, shell), authn/authz implied by the design, PII, cross-tenant leaks, dangerous tooling defaults. | The whole diff, plus config and tooling. |
 | **Performance** | Real runtime cost at the product's expected scale: connections and pooling, N+1, unbounded work, missing indexes, cold starts. | The diff plus the deploy target named in the repo's context. |
+| **Simplicity** | "Is this necessary? Can it be simpler?" Code nothing needs yet, speculative abstractions, defensive checks for impossible cases, pass-through wrappers, duplication (in the change, or of something the repo or a library already does). Says what to delete and how many lines it saves. | Every added line, plus the existing code it may duplicate. |
+| **Code architecture** | Strict separation of concerns: one responsibility per module, one thing per function at one level of abstraction, dependency direction (domain never imports adapters), no vendor types across a port, code in the right place. | The repo's intended structure (`CONTEXT.md`, area contracts, standards), then the diff. |
+
+Simplicity and architecture pull in opposite directions (delete and merge vs. split). The
+master reviewer settles each conflict: keep a separation only when the repo's docs require it or
+it untangles a real mix of concerns; otherwise less code wins.
 
 Drop a lens that has nothing to look at (no schema in the diff → skip **Data model**). Add one
 when the change needs it (accessibility, i18n, API compatibility), using the same contract.
@@ -80,7 +87,7 @@ Workflow({
     testCmd: "cd backend && make test",          // optional: the ONLY way reviewers may run tests
     stack: "Go 1.26, Chi, GORM, Postgres",       // optional: detected in step 1
     scopeDoc: "runs/001-mvp/plan.md",           // optional: what's in or out of scope
-    lenses: ["functionality","language","testing","data","security","performance"], // optional subset
+    lenses: ["functionality","language","testing","data","security","performance","simplicity","architecture"], // optional subset
     extraLenses: [{ key: "a11y", title: "Accessibility", prompt: "..." }],           // optional
     notes: "anything reviewers must know (e.g. do not touch DATABASE_URL)"            // optional
   }
@@ -123,6 +130,8 @@ consolidate in your own context.
 ## Lessons from real runs
 - The master reviewer's **Dropped** list matters as much as the findings: it shows what was
   checked and rejected (wrong, out of scope, a duplicate), so nobody re-raises it.
+- Generated code is usually too much code. Run the **simplicity** lens on every AI-written
+  change; its findings are the cheapest fixes with the biggest effect on readability.
 - Reviewers miss what tests *don't* exercise. Ask the testing lens to check whether each test
   could pass while the behaviour is broken: assert *which* constraint or error fired, and insert
   a valid row first.
