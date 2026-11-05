@@ -3,7 +3,7 @@ name: multi-lens-review
 description: >-
   Thorough code review of a pull request or branch by several specialist reviewers working in
   parallel, each through one lens (functionality/product fit, language expert, testing, data
-  model, security, performance, simplicity, code architecture), followed by a master reviewer that verifies every finding
+  model, security, performance, simplicity, code architecture, frontend and design system), followed by a master reviewer that verifies every finding
   against the code, merges duplicates, re-rates severity and returns ONE ranked report. The
   functionality reviewer takes its product context from the target repo itself (layered context:
   CLAUDE.md, CONTEXT.md, references/, runs/), so the skill works on any system. Use when asked
@@ -39,6 +39,7 @@ Why this shape:
 | **Performance** | Real runtime cost at the product's expected scale: connections and pooling, N+1, unbounded work, missing indexes, cold starts. | The diff plus the deploy target named in the repo's context. |
 | **Simplicity** | "Is this necessary? Can it be simpler?" Code nothing needs yet, speculative abstractions, defensive checks for impossible cases, pass-through wrappers, duplication (in the change, or of something the repo or a library already does). Says what to delete and how many lines it saves. | Every added line, plus the existing code it may duplicate. |
 | **Code architecture** | Strict separation of concerns: one responsibility per module, one thing per function at one level of abstraction, dependency direction (domain never imports adapters), no vendor types across a port, code in the right place. | The repo's intended structure (`CONTEXT.md`, area contracts, standards), then the diff. |
+| **Frontend & design system** | Enforces the repo's design system: UI built only from its component library, tokens instead of raw values, new visuals added to the library with a story, intent kept (not just lint). Plus accessibility, i18n/RTL, responsive layout, loading/empty/error states and React state/effect bugs. Uses the `ui-ux-pro-max` skill as its UX standard when installed. Reports nothing for changes without UI. | The design system (library README, tokens, stories, lint configs), the frontend area contract, then the UI parts of the diff. |
 
 Simplicity and architecture pull in opposite directions (delete and merge vs. split). The
 master reviewer settles each conflict: keep a separation only when the repo's docs require it or
@@ -90,7 +91,7 @@ Workflow({
     testCmd: "cd backend && make test",          // optional: the ONLY way reviewers may run tests
     stack: "Go 1.26, Chi, GORM, Postgres",       // optional: detected in step 1
     scopeDoc: "runs/001-mvp/plan.md",           // optional: what's in or out of scope
-    lenses: ["functionality","language","testing","data","security","performance","simplicity","architecture"], // optional subset
+    lenses: ["functionality","language","testing","data","security","performance","simplicity","architecture","frontend"], // optional subset
     extraLenses: [{ key: "a11y", title: "Accessibility", prompt: "..." }],           // optional
     notes: "anything reviewers must know (e.g. do not touch DATABASE_URL)"            // optional
   }

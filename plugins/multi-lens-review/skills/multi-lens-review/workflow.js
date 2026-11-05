@@ -1,6 +1,6 @@
 export const meta = {
   name: 'multi-lens-review',
-  description: 'Specialist reviewers in parallel (functionality, language, testing, data, security, performance, simplicity, architecture), then a master reviewer verifies, dedupes and ranks into one report',
+  description: 'Specialist reviewers in parallel (functionality, language, testing, data, security, performance, simplicity, architecture, frontend), then a master reviewer verifies, dedupes and ranks into one report',
   whenToUse: 'Thorough review of a PR or branch. Pass args: repoPath, target, diffCmd (+ optional testCmd, stack, scopeDoc, lenses, extraLenses, notes).',
   phases: [
     { title: 'Review', detail: 'one read-only reviewer per lens, in parallel' },
@@ -89,6 +89,25 @@ Deliberate seams the repo's docs require (for example ports/adapters named in th
 - code in the wrong place: logic in a handler or a tool that belongs in the domain, duplicated rules that should live in one owner, a package that has become a grab bag;
 - boundaries that later milestones in the plan will need, broken now.
 Do not ask for new layers or abstractions the change does not need; the simplicity lens pushes the other way. Each finding: the rule broken, where, and the concrete move (split X out of Y, move Z to package W).`,
+  },
+  {
+    key: 'frontend',
+    title: 'Frontend & design system',
+    prompt: `LENS: frontend UI/UX, and enforcing the repo's design system. If the change touches no UI (components, pages, styles, stories, i18n strings), return no findings and say so.
+First load the design system and its rules from the repo, reading only what the change touches:
+- the UI/component library (e.g. src/ui, components/, packages/ui) and its README; its layers (atoms, molecules, organisms, layout) and entry point;
+- the design tokens (CSS custom properties, theme files) and how a studio/brand/theme overrides them;
+- the stories (Storybook) and their interaction and accessibility tests;
+- the lint rules that enforce the system (ESLint, Stylelint configs) and the frontend area contract and standards (web/CONTEXT.md, references/standards.md).
+UX standard: if the ui-ux-pro-max skill is available (Skill tool, "ui-ux-pro-max:ui-ux-pro-max"), load it and use its rules and its pre-delivery checklist (references/quick-reference.md, references/pro-rules.md) as the bar for accessibility, touch, forms, navigation, layout, dark mode and motion. If it isn't available, apply the same standards from general knowledge and say so in your summary.
+Then check the change:
+- design system: app code (pages, flows) builds UI only from the library; no ad-hoc styling outside it (className/style props, raw colours, px/rem or magic numbers, one-off CSS); new visual pieces go INTO the library, at the right layer, with a story; library components use tokens, not raw values, and never import app code; lint passing is not enough: flag code that keeps the letter of the rules but breaks their intent (layout done through a generic wrapper, a component that duplicates one the library has, a token bypassed with an inline calculation);
+- accessibility: names, roles and labels; focus handling for menus, panels and dialogs (focus moves in, Escape closes, focus returns to the opener); full keyboard paths; live regions for async status; colour contrast in every theme; touch targets of at least 44px; reduced motion;
+- i18n and direction: every user-facing string through i18n in every supported language; logical CSS properties; mixed-script (bidi) text and numbers/phones that render correctly in RTL;
+- responsive layout: phone width first; no horizontal scroll; no layout shift when async content arrives; wide screens use the space sensibly;
+- flows and states: loading, empty and error states for each request; predictable navigation (where am I, how do I get back); validation messages next to the field; destructive actions guarded; slow or failed requests leave the UI usable;
+- React state and effects: stale responses overwriting newer ones, missing cleanup (listeners, timers, object URLs), wrong effect dependencies, state lost on re-key or re-mount.
+Each finding: the rule (design-system rule, or the ui-ux-pro-max guideline by name), where, what a user would see, and the fix.`,
   },
 ]
 
