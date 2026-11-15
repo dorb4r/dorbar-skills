@@ -1,0 +1,4 @@
+# Sources' raw text never enters a repo: it is someone else's work.
+raw/
+_meta/keep-out.txt
+_meta/sources.txt

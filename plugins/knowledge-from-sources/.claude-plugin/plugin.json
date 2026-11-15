@@ -1,0 +1,23 @@
+{
+  "name": "knowledge-from-sources",
+  "version": "0.1.0",
+  "description": "Turn transcripts, courses, interviews and research into a linked, quote-checked knowledge bundle.",
+  "author": {
+    "name": "Dor Bar",
+    "email": "dor.b4r@gmail.com"
+  },
+  "license": "MIT",
+  "keywords": [
+    "knowledge-bundle",
+    "transcripts",
+    "youtube",
+    "course",
+    "research",
+    "citations",
+    "quote-verification",
+    "notes",
+    "skill-authoring",
+    "gap-review",
+    "icm"
+  ]
+}
