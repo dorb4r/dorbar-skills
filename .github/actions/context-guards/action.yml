@@ -1,0 +1,37 @@
+name: context guards
+description: >-
+  Layered-context (ICM) checks on the calling repo: every link and Inputs path resolves, context
+  files stay within budget, belief lines carry provenance. Runs the shared scripts from the
+  layered-context skill at this action's pinned commit; nothing is copied into the calling repo.
+  The calling repo keeps only its own limits in .context-budget.json.
+inputs:
+  root:
+    description: Folder to check, relative to the workspace (run actions/checkout first).
+    default: "."
+  skip:
+    description: Space-separated folder names for links.py to skip.
+    default: ""
+  provenance:
+    description: Check belief-line provenance ("true" / "false").
+    default: "true"
+  blocking:
+    description: Fail the job when a guard fails ("true"), or only annotate a warning ("false").
+    default: "true"
+runs:
+  using: composite
+  steps:
+    - name: context guards
+      shell: bash
+      env:
+        ROOT: ${{ inputs.root }}
+        SKIP: ${{ inputs.skip }}
+        PROVENANCE: ${{ inputs.provenance }}
+        BLOCKING: ${{ inputs.blocking }}
+        SCRIPTS: ${{ github.action_path }}/../../../plugins/layered-context/skills/layered-context/scripts
+      run: |
+        args=("$ROOT" --summary "$GITHUB_STEP_SUMMARY")
+        for s in $SKIP; do args+=(--skip "$s"); done
+        [ "$PROVENANCE" = "true" ] || args+=(--no-provenance)
+        if python3 -I "$SCRIPTS/context_guards.py" "${args[@]}"; then exit 0; fi
+        if [ "$BLOCKING" = "true" ]; then exit 1; fi
+        echo "::warning title=context guards::a guard failed (non-blocking); see the job summary"

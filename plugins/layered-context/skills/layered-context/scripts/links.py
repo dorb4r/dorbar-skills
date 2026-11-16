@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-# From icm-architect (MIT, (c) 2026 Jake Van Clief) - https://github.com/RinDig/icm-architect - see ../../../LICENSE-icm-architect
+# From icm-architect (MIT, (c) 2026 Jake Van Clief) - https://github.com/RinDig/icm-architect - see LICENSE-icm-architect
+# Adapted for layered-context: Inputs headings match by prefix, #section is stripped, a "Do NOT load"
+# bullet is skipped, every input outside runs/ must exist, and ROOT defaults to the current directory.
 """List every relative link and input path that does not resolve. Exit 1 if there are any.
 
-Copy to _tools/ in a workspace and run from anywhere:
-    python -I _tools/links.py [ROOT] [--skip FOLDER ...] [--graph FILE]
-ROOT defaults to the folder that holds _tools/. Standard library only.
+Run through context_guards.py or the context-guards action, or directly:
+    python3 -I links.py [ROOT] [--skip FOLDER ...] [--graph FILE]
+ROOT defaults to the current directory. Standard library only.
 
 Checks every .md file outside dot-folders, node_modules/, _archive/, _templates/, raw/ and any
 folder named with --skip:
@@ -12,13 +14,18 @@ folder named with --skip:
     lines such as @AGENTS.md (the one-line pointers CLAUDE.md and GEMINI.md hold).
     Web links, #anchors, {placeholders} and [[wikilinks]] are not checked.
   - backticked paths in list items under an Inputs heading, relative to the file or to ROOT.
-    A reference (every-run) input must exist; any other input passes if its folder exists,
-    since this run's output may not be made yet.
+    Every input must exist, except one under runs/, which passes if its folder exists, since
+    this run's output may not be made yet.
+
+Inputs format (the one both this script and context_budget.py parse): a heading whose text starts
+with "Inputs", then a bulleted list (- or *) of backticked paths. A path may end in #section
+(`references/decisions.md#Database`); the section is stripped before resolving. A bullet that
+starts with "Do NOT load" is skipped.
 Fenced code blocks are skipped.
 
 --graph FILE also writes the graph it walked, one JSON object per line: first the root (relative
 to FILE), then each file (path, type, title, description, tags) and each link between .md files.
-viz.py draws it.
+icm-architect's viz.py draws it (not included here).
 """
 import json
 import os
@@ -91,7 +98,7 @@ def main():
         i = args.index("--graph")
         graph_out = Path(args[i + 1]).resolve()
         del args[i:i + 2]
-    root = Path(args[0]).resolve() if args else Path(__file__).resolve().parent.parent
+    root = Path(args[0]).resolve() if args else Path.cwd()
 
     files = sorted(f for f in root.rglob("*.md")
                    if not any(p.startswith(".") or p in skip for p in f.relative_to(root).parts[:-1]))
@@ -122,7 +129,7 @@ def main():
         for line in lines_outside_fences(body):
             h = HEADING.match(line)
             if h:
-                in_inputs = h.group(2).strip().lower() == "inputs"
+                in_inputs = h.group(2).strip().lower().startswith("inputs")
                 title = title or (h.group(2) if h.group(1) == "#" else "")
                 continue
             imp = IMPORT.match(line.strip())
@@ -130,12 +137,13 @@ def main():
                 link(f, rel, imp.group(1))
             for m in LINK.finditer(line):
                 link(f, rel, m.group(1)[1:-1] if m.group(1).startswith("<") else m.group(1))
-            if in_inputs and re.match(r"\s*[-*]\s", line):
-                strict = "reference" in line.lower()  # every-run inputs must already exist
+            if (in_inputs and re.match(r"\s*[-*]\s", line)
+                    and not line.lower().lstrip("-* ").startswith("do not load")):
                 for m in TICK.finditer(line):
-                    p = m.group(1)
-                    if not looks_like_path(p):
+                    p = m.group(1).split("#", 1)[0]
+                    if not p or not looks_like_path(p):
                         continue
+                    strict = not p.startswith("runs/")  # a run's output may not be made yet
                     checked += 1
                     hits = [(f.parent / p).resolve(), (root / p).resolve()]
                     if not any(h.exists() or (not strict and h.parent.is_dir()) for h in hits):

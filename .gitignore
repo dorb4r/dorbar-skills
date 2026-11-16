@@ -3,3 +3,6 @@ node_modules/
 *.log
 .cc10x/
 .claude/settings.local.json
+build/
+*.egg-info/
+__pycache__/

@@ -55,10 +55,10 @@ One human check, after everything countable and before the first irreversible st
 **Done when** the Check section's `Human check:` line names the person, the irreversible step, the question and the review file.
 
 ### 6. Run the loop
-Copy `scripts/loop_decide.py` from this skill into the repo's `scripts/`. For attempt K = 1, 2, …:
+Run `scripts/loop_decide.py` from this skill's folder (the repo keeps no copy). For attempt K = 1, 2, …:
 1. Write `runs/<id>/NN_attempt-K.md`. Attempt 1 works from the stage Inputs; each later attempt starts from the attempt `loop_decide.py` names and changes only what its failing lines name (the **carry**).
 2. Evaluate it against the full original list → `runs/<id>/NN_attempt-K_check.md` (format in reference.md).
-3. Run `python -I scripts/loop_decide.py runs/<id> NN --budget 3 --output runs/<id>/NN_<name>.md`. Exit 3: go again with the printed carry. Exit 0, 1 or 4: the loop has ended.
+3. Run `python -I <bounded-loop skill dir>/scripts/loop_decide.py runs/<id> NN --budget 3 --output runs/<id>/NN_<name>.md`. Exit 3: go again with the printed carry. Exit 0, 1 or 4: the loop has ended.
 
 An attempt that cannot run (a missing credential, a tool absent) or whose rubric line a **decision-gates** question routed to a person is **blocked**, not failed: its check file's first line is `blocked: <why>`, and `loop_decide.py` stops with exit 4 (reference.md → Blocked is not failing).
 
