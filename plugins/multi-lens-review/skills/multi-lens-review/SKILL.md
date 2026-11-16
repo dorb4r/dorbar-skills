@@ -25,6 +25,9 @@ Why this shape:
   catches tests that pass while the code is wrong. One generalist misses most of these.
 - **Reviewers are confidently wrong sometimes.** The master reviewer is a skeptic: it opens each
   file and line, may run tests, drops what doesn't hold, and says why.
+- **Disagreements get ruled, not blended.** The master lists every conflict between lenses before
+  ruling on any (a rule written into its prompt, shared with **parallel-branches**), and treats
+  a problem several lenses found independently as stronger evidence.
 - **One report, not six.** Routing and dedup happen outside your context.
 
 ## The lenses
@@ -35,7 +38,7 @@ Why this shape:
 | **Language expert** | Idiomatic, correct use of the repo's language and frameworks: error handling, resource lifetimes, API design of the touched packages, build tooling. | The language and frameworks detected from the repo (manifest files, file types in the diff). |
 | **Testing** | Could the tests pass while the code is wrong? Missing cases and edges, tests asserting the wrong thing, isolation and cleanup, flakiness. | The tests in the diff plus the code they cover. May run the repo's test command. |
 | **Data model** | Schema and persistence: constraints, tenancy or ownership boundaries, nullability, indexes against the queries that will run, migrations up and down, money and time types. | Migrations, models and the queries in the diff. |
-| **Security** | Secrets handling, injection (SQL, URL, path, shell), authn/authz implied by the design, PII, cross-tenant leaks, dangerous tooling defaults. | The whole diff, plus config and tooling. |
+| **Security** | Secrets handling, injection (SQL, URL, path, shell), authn/authz implied by the design, PII, cross-tenant leaks, dangerous tooling defaults. For agent-built code also: a hand-written auth layer beside the provider's, JWT checks missing issuer/audience, public-route exceptions, secrets leaked during infra setup outside the diff, and the spec markdown that produced each hole. | The whole diff, plus config, tooling, git history and the task/spec markdown the agent worked from. |
 | **Performance** | Real runtime cost at the product's expected scale: connections and pooling, N+1, unbounded work, missing indexes, cold starts. | The diff plus the deploy target named in the repo's context. |
 | **Simplicity** | "Is this necessary? Can it be simpler?" Code nothing needs yet, speculative abstractions, defensive checks for impossible cases, pass-through wrappers, duplication (in the change, or of something the repo or a library already does). Says what to delete and how many lines it saves. | Every added line, plus the existing code it may duplicate. |
 | **Code architecture** | Strict separation of concerns: one responsibility per module, one thing per function at one level of abstraction, dependency direction (domain never imports adapters), no vendor types across a port, code in the right place. | The repo's intended structure (`CONTEXT.md`, area contracts, standards), then the diff. |
@@ -139,6 +142,10 @@ consolidate in your own context.
 - Reviewers miss what tests *don't* exercise. Ask the testing lens to check whether each test
   could pass while the behaviour is broken: assert *which* constraint or error fired, and insert
   a valid row first.
+- Agent-built apps leak where no diff shows: a real audit (shown by Jake Van Clief, Clief Notes)
+  found a key exposed while an agent provisioned the cloud setup, a second hand-written auth layer
+  whose JWT check skipped the issuer, and traced both to an ambiguous task markdown. The security
+  lens's agent-built checks come from that audit.
 - Verify a test harness's isolation instead of trusting it. A hosted database proxy silently
   dropped a `search_path` connection parameter, so "isolated" tests all shared one schema and
   passed only because of the order they ran in.
