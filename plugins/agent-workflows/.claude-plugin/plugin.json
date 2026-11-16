@@ -1,0 +1,25 @@
+{
+  "name": "agent-workflows",
+  "version": "0.1.0",
+  "description": "Agent workflow patterns from ICM practice: decide what to automate (workflow-audit), turn chat corrections into a skill (corrections-to-skill), retry a check under a written stop rule (bounded-loop), route repeated judgement calls by confidence (decision-gates), and fan work out to parallel sub-agents and merge it without conflicting facts (parallel-branches).",
+  "author": {
+    "name": "Dor Bar",
+    "email": "dor.b4r@gmail.com"
+  },
+  "license": "MIT",
+  "keywords": [
+    "agent-workflows",
+    "automation-audit",
+    "bounded-loop",
+    "checks",
+    "confidence-routing",
+    "decision-gates",
+    "fan-out",
+    "human-in-the-loop",
+    "ICM",
+    "parallel-sub-agents",
+    "retry-budget",
+    "skill-authoring",
+    "workflow-audit"
+  ]
+}

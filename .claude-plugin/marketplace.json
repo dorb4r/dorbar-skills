@@ -8,6 +8,32 @@
   "version": "0.1.0",
   "plugins": [
     {
+      "name": "agent-workflows",
+      "source": "./plugins/agent-workflows",
+      "description": "Agent workflow patterns from ICM practice: decide what to automate (workflow-audit), turn chat corrections into a skill (corrections-to-skill), retry a check under a written stop rule (bounded-loop), route repeated judgement calls by confidence (decision-gates), and fan work out to parallel sub-agents and merge it without conflicting facts (parallel-branches).",
+      "version": "0.1.0",
+      "author": {
+        "name": "Dor Bar",
+        "email": "dor.b4r@gmail.com"
+      },
+      "keywords": [
+        "agent-workflows",
+        "automation-audit",
+        "bounded-loop",
+        "checks",
+        "confidence-routing",
+        "decision-gates",
+        "fan-out",
+        "human-in-the-loop",
+        "ICM",
+        "parallel-sub-agents",
+        "retry-budget",
+        "skill-authoring",
+        "workflow-audit"
+      ],
+      "license": "MIT"
+    },
+    {
       "name": "knowledge-from-sources",
       "source": "./plugins/knowledge-from-sources",
       "description": "Turn transcripts, courses, interviews and research into a linked, quote-checked knowledge bundle.",
@@ -76,7 +102,9 @@
         "layered-context",
         "quality",
         "simplicity",
-        "architecture"
+        "architecture",
+        "frontend",
+        "design-system"
       ],
       "license": "MIT"
     },
@@ -95,6 +123,44 @@
         "second-brain",
         "notes",
         "planning"
+      ],
+      "license": "MIT"
+    },
+    {
+      "name": "repo-vetting",
+      "source": "./plugins/repo-vetting",
+      "description": "Read-only vetting of a third-party repository (Claude Code skill or plugin, MCP server, library, template) before you install or depend on it: scan hooks, install scripts, network and credential access, injection text; report the exact commit, verdict and unknowns.",
+      "version": "0.1.0",
+      "author": {
+        "name": "Dor Bar",
+        "email": "dor.b4r@gmail.com"
+      },
+      "keywords": [
+        "MCP",
+        "plugin-review",
+        "prompt-injection",
+        "repo-vetting",
+        "security",
+        "supply-chain",
+        "third-party"
+      ],
+      "license": "MIT"
+    },
+    {
+      "name": "verified-web-edit",
+      "source": "./plugins/verified-web-edit",
+      "description": "Change live web pages (CMS, course platform, docs site, store listing) through a browser agent with a verify-after-each-edit loop and one result row per page; stops on the first mismatch.",
+      "version": "0.1.0",
+      "author": {
+        "name": "Dor Bar",
+        "email": "dor.b4r@gmail.com"
+      },
+      "keywords": [
+        "browser-automation",
+        "CMS",
+        "content-update",
+        "verification",
+        "web-edit"
       ],
       "license": "MIT"
     }

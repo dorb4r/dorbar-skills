@@ -61,7 +61,13 @@ Then check the change against it: requirements missing or contradicted, states/t
   {
     key: 'security',
     title: 'Security expert',
-    prompt: `LENS: security. Secrets handling (storage, references, env loading, logs), injection (SQL including hand-built literals, URL/path, shell), authentication/authorization implied by the design (who can perform each action?), PII handling, cross-tenant leakage, dangerous defaults in tooling (destructive commands without guards, prod credentials reachable from dev commands), committed data that should not be in the repo.`,
+    prompt: `LENS: security. Secrets handling (storage, references, env loading, logs), injection (SQL including hand-built literals, URL/path, shell), authentication/authorization implied by the design (who can perform each action?), PII handling, cross-tenant leakage, dangerous defaults in tooling (destructive commands without guards, prod credentials reachable from dev commands), committed data that should not be in the repo.
+Agent-built code fails in recognisable ways; check each:
+- a second auth layer: hand-written token, session or crypto code next to the auth provider's own SDK call (e.g. a custom JWT verifier beside the provider's session check). Two auth paths double the attack surface; the fix is usually to delete the custom one and use the provider's;
+- custom JWT verification: algorithm pinned (no "none", no HS/RS confusion), signature, expiry, and issuer AND audience checked against THIS project. Without the issuer/audience check, a valid token minted by any other project on the same provider is accepted;
+- public-route exceptions: read every public-prefix list and every later "is public" exception together. Flag endpoints re-exposed by an exception, and non-GET methods (POST/PUT/DELETE) reachable without auth on a public route, webhooks excepted only when they verify a signature;
+- secrets outside the diff: keys leak while an agent provisions infrastructure (cloud setup, CI, deploy), not only in code. Search the git history for key patterns (e.g. git log -p -S<prefix>), and read committed config, .env examples, CI files and any committed agent logs or transcripts. Report as a value's name and location, never the value. When the repo cannot show how infra was provisioned, say so and list the questions for the owner (which agent set it up, where its session logs live, which keys it handled);
+- root cause in the spec: when the repo keeps the task or spec markdown the agent built from (tasks/, executed/, docs/, runs/), trace each auth or secrets finding to the instruction that produced it and quote it. An ambiguous instruction needs fixing too, or the next agent rebuilds the same hole.`,
   },
   {
     key: 'performance',
@@ -160,14 +166,16 @@ The change is checked out at ${A.repoPath} (diff: ${A.diffCmd}). READ-ONLY: no e
 
 Specialist reviewers (${done.map(r => r.lens).join(', ')}) produced the raw findings below.
 1. VERIFY every finding against the actual code: open the file and line, run a test if needed. Be skeptical. Drop anything wrong, speculative, out of scope (${A.scopeDoc || "the repo's current task plan"}), or already handled.
-2. MERGE duplicates across lenses into one item and note which lenses raised it.
+2. LIST DISAGREEMENTS before ruling: every place where lenses contradict each other (one calls code necessary and another says delete it, two fixes that cannot both be applied, different severities for the same problem). Write the full list first, then rule on each one explicitly: pick a side and say why. Never blend two findings into a compromise nobody proposed. The order is fixed: list every difference first, then rule on each.
+   MERGE duplicates across lenses into one item and note which lenses raised it. A problem reached independently by several lenses is stronger evidence (it cannot be an echo): verify it first and let it weigh toward the higher severity. A finding raised by one lens alone is still judged on the code.
    When simplicity and architecture disagree (one says merge or delete, the other says split), decide: keep the separation only if the repo's docs require it or it removes a real mix of concerns; otherwise prefer less code. Say which way you went.
 3. RE-RATE severity: blocker = must fix before merge (bug, data-integrity or tenancy hole, security hole, contradiction with the product definition); major = fix in this PR (cheap now, expensive later); minor = fine as a written follow-up.
 4. Mark findings that are really PRODUCT DECISIONS for the owner (not bugs) as "needs a decision", with the options.
 5. Write ONE report in GitHub-flavoured markdown for the repo owner (plain and concrete; not everyone is an expert in every area):
    - one-line verdict: merge / merge after fixes / needs rework
    - what you ran to verify (e.g. the test command and its result)
-   - a table of confirmed findings: #, severity, lens(es), file:line, one-line issue
+   - a table of confirmed findings: #, severity, lens(es), file:line, one-line issue (mark findings raised independently by 2+ lenses)
+   - "Disagreements": each conflict between lenses and your ruling, one line each ("none" if none)
    - per finding: problem, failure scenario, fix (short)
    - "Needs a decision": the product calls, each with options and a recommendation
    - "Dropped": each rejected finding with a one-line reason

@@ -9,6 +9,7 @@
 //   mkt bump <plugin> <patch|minor|major>                       manual single-plugin bump
 //   mkt validate                                                 validate manifests + run `claude plugin validate`
 //   mkt install-hooks                                            install the commit-msg hook (conventional-commit lint)
+//   mkt vendor [update [--to <sha>]]                             check/update vendored third-party files (vendor.json)
 //
 // Design: each plugin's `.claude-plugin/plugin.json` is the source of truth.
 // marketplace.json's plugins[] is generated; never hand-edit plugin entries.
@@ -311,6 +312,73 @@ function cmdValidate() {
   process.exit(ok ? 0 : 1);
 }
 
+// ---------- vendored third-party files (vendor.json) ----------
+const VENDOR_PATH = join(ROOT, "vendor.json");
+const OUR_HEADER = /^# (From |Adapted for )/;
+
+async function fetchText(url) {
+  const r = await fetch(url, { headers: { "User-Agent": "mkt-vendor" } });
+  if (!r.ok) throw new Error(`${r.status} ${url}`);
+  return r.text();
+}
+const rawUrl = (repo, sha, path) => `https://raw.githubusercontent.com/${repo}/${sha}/${path}`;
+// our copy minus our attribution header (header lines sit right after the shebang)
+function stripHeader(text) {
+  const lines = text.split("\n");
+  const start = lines[0]?.startsWith("#!") ? 1 : 0;
+  return [...lines.slice(0, start), ...lines.slice(start + headerOf(text).length)].join("\n");
+}
+function withHeader(upstream, headerLines) {
+  const lines = upstream.split("\n");
+  const at = lines[0]?.startsWith("#!") ? 1 : 0;
+  return [...lines.slice(0, at), ...headerLines, ...lines.slice(at)].join("\n");
+}
+function headerOf(text) {
+  const lines = text.split("\n");
+  const start = lines[0]?.startsWith("#!") ? 1 : 0;
+  const out = [];
+  for (let i = start; i < lines.length && OUR_HEADER.test(lines[i]); i++) out.push(lines[i]);
+  return out;
+}
+
+async function cmdVendor(args) {
+  const flags = parseFlags(args);
+  const update = flags._[0] === "update";
+  if (flags._[0] && !update) die("usage: mkt vendor [update [--to <sha>]]");
+  const manifest = readJSON(VENDOR_PATH);
+  let problems = 0;
+  for (const src of manifest.sources) {
+    const head = JSON.parse(await fetchText(`https://api.github.com/repos/${src.repo}/commits/HEAD`)).sha;
+    const target = update ? (flags.to || head) : src.commit;
+    console.log(c.bold(src.name) + c.dim(` ${src.repo}  pinned ${src.commit.slice(0, 7)}  upstream HEAD ${head.slice(0, 7)}`));
+    for (const f of src.files) {
+      const pinned = await fetchText(rawUrl(src.repo, src.commit, f.path));
+      const latest = head === src.commit ? pinned : await fetchText(rawUrl(src.repo, head, f.path)).catch(() => null);
+      const moved = latest !== pinned;
+      for (const copy of f.copies) {
+        const ours = readFileSync(join(ROOT, copy), "utf8");
+        const same = stripHeader(ours) === pinned;
+        let state = f.fork ? c.yel("fork") : same ? c.grn("matches pin") : c.red("edited locally");
+        if (!f.fork && !same) problems++;
+        if (moved) state += c.yel(latest === null ? "  (removed upstream at HEAD)" : "  (changed upstream since pin)");
+        if (update && !f.fork && target !== src.commit) {
+          const next = await fetchText(rawUrl(src.repo, target, f.path));
+          writeFileSync(join(ROOT, copy), withHeader(next, headerOf(ours)));
+          state = c.grn(`updated to ${target.slice(0, 7)}`);
+        }
+        console.log(`  ${f.path} -> ${copy}  ${state}`);
+      }
+      if (f.fork && moved) console.log(c.dim(`    fork: ${f.fork}; review upstream changes by hand`));
+    }
+    if (update && target !== src.commit) {
+      src.commit = target;
+      writeJSON(VENDOR_PATH, manifest);
+      console.log(c.dim("  review with: git diff -- plugins vendor.json"));
+    }
+  }
+  if (problems) { console.error(c.red(`✗ ${problems} vendored copy(ies) differ from the pinned upstream; mark as fork or restore`)); process.exit(1); }
+}
+
 function cmdInstallHooks() {
   if (!hasGit()) die("not a git repo");
   const hook = join(ROOT, ".git", "hooks", "commit-msg");
@@ -353,6 +421,7 @@ const HELP = `mkt — dorbar-skills marketplace toolkit
   mkt bump <plugin> <patch|minor|major>                        manual single-plugin bump
   mkt validate                                                 validate manifests + claude plugin validate
   mkt install-hooks                                            install commit-msg conventional-commit lint
+  mkt vendor [update [--to <sha>]]                             check vendored files against upstream (vendor.json)
 `;
 
 const [cmd, ...rest] = process.argv.slice(2);
@@ -364,6 +433,7 @@ switch (cmd) {
   case "bump": cmdBump(rest); break;
   case "validate": cmdValidate(); break;
   case "install-hooks": cmdInstallHooks(); break;
+  case "vendor": await cmdVendor(rest); break;
   case undefined: case "help": case "--help": case "-h": console.log(HELP); break;
   default: die(`unknown command: ${cmd}\n\n${HELP}`);
 }

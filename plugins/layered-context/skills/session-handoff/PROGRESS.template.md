@@ -34,5 +34,9 @@ Spec: <path to the task brief / issue / PRD this work serves>
 ## Open questions
 - <unknown or blocker>, <who or what can answer it>
 
+## Facts I lacked
+<!-- One line per fact this session or sub-agent needed that the note and spec did not hold. Never guess: stop, or leave a visible placeholder. -->
+- <fact> → stopped | placeholder: <what stands in>
+
 ## Next
 <one concrete first action, small enough to verify in one step, e.g. "run `<cmd>` and confirm test X fails on line Y">

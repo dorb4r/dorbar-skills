@@ -2,7 +2,7 @@
 
 Recipes and formats the `context-hygiene` procedure points at. Read the section a step names; nothing here needs reading top to bottom.
 
-Contents: Belief lines · Keep test · Duplicate hunt · Stale signals · Proposal format · Fresh-session prompt · Review line · Fold-in rule · The archive
+Contents: Belief lines · Keep test · Duplicate hunt · Stale signals · Proposal format · Fresh-session prompt · Planted-fact tests · Review line · Fold-in rule · The archive
 
 ## Belief lines
 
@@ -36,7 +36,7 @@ For each candidate line in an always-loaded file, ask in order and stop at the f
 
 1. Would an agent in a fresh session need to be told this again for its work to be right? No: it was disposable; drop it.
 2. Is it the decision itself, or the story of reaching it? Keep the decision; the story is in the PR.
-3. Will it still be true next month, and does the line say since when and by whom? Add the provenance, or drop it.
+3. Is it durable, and does the line carry its provenance (since when, by whom)? Add the provenance, or drop it.
 4. Is it worth a seat on every load? If you hesitate, move it to a drawer file behind a pointer.
 
 ## Duplicate hunt
@@ -66,7 +66,7 @@ Also grep names of things (services, tables, feature names, owners), because a r
 | Shipped plan in factory | a plan or spec in `references/` whose work is merged | move to `_archive/` or its `runs/<id>/` |
 | Dead route | router names a folder or file that is gone or empty | remove the route |
 | Unrouted file | nothing in any router or contract points at it | route it, or archive it |
-| Model default | an instruction the current model follows without being told | remove after a fresh-session check without it |
+| Model default | an instruction the current model follows without being told; sweep for these after every model or harness upgrade | remove after a fresh-session check without it |
 | Diary line | "tried", "we discussed", "for now", undated "this week" | rewrite as a rule with provenance, or drop |
 | Routing file with content | `AGENTS.md` or a `CONTEXT.md` explaining instead of pointing | move content to a shelf, leave a pointer |
 
@@ -112,6 +112,19 @@ Then list every file you opened, in order, with one line on why.
 ```
 
 Score it: each answer right or wrong against the code and the human; files opened that the task did not need; hops from `AGENTS.md` to the right contract (two or fewer). Question 6 checks the disagreement rule in `AGENTS.md` actually fires.
+
+## Planted-fact tests
+
+The fresh-session prompt proves the map routes. These prove the beliefs are actually used. Each runs in its own fresh sub-agent with no conversation context.
+
+**Recall** (on the real tree). Pick three belief lines, favouring ones deep in a long file. Before giving any task, ask: "What do you know about <subject of the line>? Say which file told you." Pass: it states the line's content and cites its file. A line that is routed but not recalled is stored, not remembered: move it under a heading named for when it is needed, or into a drawer file with a pointer, then retest.
+
+**Correct** and **remove** run in a scratch copy so the real tree is untouched. Build the scratch copy from the working tree, so uncommitted approved edits are in it: `scratch=$(mktemp -d) && rsync -a --exclude .git ./ "$scratch/"` from the repo root. Run the test there, then delete it (`rm -rf "$scratch"`).
+
+- **Correct:** change one belief line there to a new, plausible value (a TTL, a send day, a provider). Ask a question whose answer depends on it. Pass: the answer uses the new value. Fail: it repeats the old value, so another copy or a stale source still holds it; find it (duplicate hunt) and fix the real tree.
+- **Remove:** delete one belief line there. Ask the same kind of question. Pass: it says the context does not state this (and where it looked). Fail: it invents an answer; make "if a fact is not in the context, say so" explicit in `AGENTS.md` rules and retest.
+
+Delete the scratch copy afterwards. Record each test's question, the planted change, the answer, and pass/fail in `05_fresh_session.md`.
 
 ## Review line
 

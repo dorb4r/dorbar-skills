@@ -1,0 +1,19 @@
+{
+  "name": "repo-vetting",
+  "version": "0.1.0",
+  "description": "Read-only vetting of a third-party repository (Claude Code skill or plugin, MCP server, library, template) before you install or depend on it: scan hooks, install scripts, network and credential access, injection text; report the exact commit, verdict and unknowns.",
+  "author": {
+    "name": "Dor Bar",
+    "email": "dor.b4r@gmail.com"
+  },
+  "license": "MIT",
+  "keywords": [
+    "MCP",
+    "plugin-review",
+    "prompt-injection",
+    "repo-vetting",
+    "security",
+    "supply-chain",
+    "third-party"
+  ]
+}

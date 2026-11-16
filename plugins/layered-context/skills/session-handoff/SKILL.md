@@ -15,12 +15,12 @@ description: >-
 
 A **progress note** carries a task across a break: a new session, another machine, a colleague, a sub-agent. It holds the useful facts (results, evidence, decisions, dead ends, the next step), not the transcript. The note is a **belief**, not a record: it was true when written, and resume checks it against reality before acting on it.
 
-After Jake Van Clief's Clief Notes lesson on saving state; status-on-disk from icm-architect (MIT).
+After Jake Van Clief's Clief Notes lessons on saving state and resuming work; the facts-I-lacked return after Bas Rosario's Graph Engineering series; status-on-disk from icm-architect (MIT).
 
 ## Where the note lives
 - **Layered repo** (has `AGENTS.md` and `runs/`): `runs/<task-id>/PROGRESS.md`, beside the task's other product.
 - **Otherwise:** `PROGRESS.md` at the repo root, or the worktree root when the work is in a worktree. Tell the user which you used.
-- One note per task. Never read `_archive/`.
+- One note per task. Task work leaves `_archive/` unread; only audits search it (layered-context → "Archive, don't load").
 - Durable decisions belong in `references/decisions.md` (the factory), not the note. See Graduate below.
 
 ## Choose the branch
@@ -41,15 +41,18 @@ After Jake Van Clief's Clief Notes lesson on saving state; status-on-disk from i
 
 ## Resume
 1. **Read** `AGENTS.md`, the task spec the note names, then the note. Nothing else yet.
-2. **Verify before trusting.** Run `git status`, `git log -1`, check the branch, and run the note's test command. Open the files named under Completed and Checked. Check that listed processes or ports are actually up.
+2. **Verify before trusting**, checking three continuities separately; one surviving says nothing about the others:
+   - **Connection**: you reached the right host, repo and worktree. A reconnected terminal or reattached tmux session proves only this.
+   - **Process**: each process or port the note lists is actually up and still doing its job (its status or log, not the note's word).
+   - **Saved state**: run `git status`, `git log -1`, check the branch, run the note's test command, and open the files named under Completed and Checked.
 3. **Sort every claim** into two lists: **confirmed** (you saw it in git, a test run or a file this session) and **claimed** (only the note says so). Report both to the user, with each discrepancy.
 4. **Reality wins.** When the note disagrees with what you observed, correct the note in place now, with today's date and your name on the changed lines. When two context files disagree with each other (note vs `references/decisions.md`, note vs spec), say so and stop. Do not choose.
 5. **Continue** from Next, unless verification showed it is already done or blocked; then propose the replacement Next and confirm it.
 
-**Done when:** each Completed/Checked claim is marked confirmed or claimed; the note matches observed reality; the user has seen the discrepancies; you are executing (or have proposed) one Next action.
+**Done when:** connection, process and saved state each have their own verdict; each Completed/Checked claim is marked confirmed or claimed; the note matches observed reality; the user has seen the discrepancies; you are executing (or have proposed) one Next action.
 
 ## Handing off
-- **To a sub-agent:** the note is its brief. Save first, then dispatch with the note path plus the scope of its slice; it reads only `AGENTS.md`, the spec and the note. It saves back to the same note (or reports to you and you save), never a second note.
+- **To a sub-agent:** the note is its brief. Save first, then dispatch with the note path plus the scope of its slice; it reads only `AGENTS.md`, the spec and the note. It saves back to the same note (or reports to you and you save), never a second note. Its return always includes **Facts I lacked**, one line per fact it needed that the note and spec did not hold: `- <fact> → stopped | placeholder: <what stands in>`. It never guesses: it stops, or leaves a visible placeholder. Fold each into the note or spec before the next dispatch; a recurring item means the brief is missing a line. For several sub-agents working in parallel, use the **parallel-branches** skill (agent-workflows plugin).
 - **To another person or machine:** commit or push the work and the note together; uncommitted state stays on the old machine. List anything that cannot travel (local env values, running processes) under Workspace › Env.
 
 ## Decision belief lines
