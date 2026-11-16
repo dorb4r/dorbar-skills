@@ -1,0 +1,34 @@
+{
+  "$comment": "Third-party files copied into plugins. Each copy is the upstream file at `commit` plus our attribution header (lines starting with '# From <name>' or '# Adapted for' right after the shebang). Check drift with `mkt vendor`; pull a reviewed update with `mkt vendor update [--to <sha>]`. A `fork` entry is our modified copy: it is reported, never overwritten.",
+  "sources": [
+    {
+      "name": "icm-architect",
+      "repo": "RinDig/icm-architect",
+      "license": "MIT",
+      "commit": "8bc2f5610d3843b3ffa31a142effe6b6337fef3c",
+      "files": [
+        {
+          "path": "scripts/links.py",
+          "copies": [
+            "plugins/layered-context/skills/layered-context/scripts/links.py",
+            "plugins/knowledge-from-sources/skills/knowledge-from-sources/scripts/links.py"
+          ]
+        },
+        {
+          "path": "scripts/index.py",
+          "copies": [
+            "plugins/layered-context/skills/system-map/scripts/index.py",
+            "plugins/knowledge-from-sources/skills/knowledge-from-sources/scripts/index.py"
+          ]
+        },
+        {
+          "path": "scripts/quotes.py",
+          "fork": "reads sources from raw/ at the bundle root, skips _archive/, accepts only .md/.txt; offered upstream",
+          "copies": [
+            "plugins/knowledge-from-sources/skills/knowledge-from-sources/scripts/quotes.py"
+          ]
+        }
+      ]
+    }
+  ]
+}
