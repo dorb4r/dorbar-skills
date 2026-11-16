@@ -21,6 +21,7 @@ This skill is the recurring maintenance pass for a workspace built with the sibl
 - A base file is over budget, or `context_budget.py` exits 1.
 - An agent acted on a superseded decision, or two context files disagree.
 - Several features merged since the last review, or the review date in `CONTEXT.md` has passed.
+- After a model or harness upgrade: prune instructions the new model follows unprompted (the "Model default" [stale signal](reference.md#stale-signals)), so each upgrade costs fewer tokens.
 - Before handing the repo to a new person or a new agent setup.
 
 ## When not to use
@@ -65,8 +66,9 @@ Present the proposal and **stop for the human's approval**. Apply only approved 
 
 ### 5. Fresh-session test
 Spawn a sub-agent with no conversation context (prompt in [reference.md](reference.md#fresh-session-prompt)). It starts at `AGENTS.md` and answers: what is this repo, what is in progress, what is next, and where it would go for two real tasks you name, one recent and one rare. It lists every file it opened, in order.
-Compare against the truth (the code, open PRs, the human). A wrong or hedged answer, a file opened that the task did not need, or more than two hops from `AGENTS.md` to the right contract is a **map** failure: fix the route or the pointer wording, not by adding explanation, then re-run the test. Write `05_fresh_session.md` with both runs' answers and file lists.
-**Done when** a fresh run answers all questions correctly and opens only routed files.
+Compare against the truth (the code, open PRs, the human). A wrong or hedged answer, a file opened that the task did not need, or more than two hops from `AGENTS.md` to the right contract is a **map** failure: fix the route or the pointer wording, not by adding explanation, then re-run the test.
+Then run the three [planted-fact tests](reference.md#planted-fact-tests), each in a fresh session: **recall** (asked about three belief lines before any task, it answers with their content), **correct** (one belief changed in a scratch copy of the working tree, the answer changes with it), **remove** (one belief deleted there, it says the context does not state it instead of inventing it). Write `05_fresh_session.md` with every run's answers and file lists.
+**Done when** a fresh run answers all questions correctly, opens only routed files, and all three planted-fact tests pass.
 
 ### 6. Schedule the next review
 Add or update one line in the root `CONTEXT.md` (format in [reference.md](reference.md#review-line)): the next review date and the trigger, whichever comes first. Default cadence: monthly, or after 5 merged features. Check that the delivery stage contract carries the [fold-in rule](reference.md#fold-in-rule) so each ship updates beliefs in place; add it if missing (that edit goes through the step-4 approval like any other).
@@ -78,4 +80,4 @@ Write `06_check.md`, first line `pass` or `fail: <why>`, then a three-line summa
 - **Fold what is unused, split what keeps growing.** A stage nobody edits can merge into its neighbour; a contract that grows every review gets split. Propose both in step 4.
 - **Restart is cheap.** If a file needs more rewrites than keeps, propose replacing it with a fresh one that copies over only the lines marked `current`.
 
-Credits: adapted in part from icm-architect (MIT, (c) 2026 Jake Van Clief). Persistence, retrieval and correction ideas after Bas Rosario's Memory Engineering series and Jake Van Clief's Foundation lessons (Clief Notes), restated in our own words.
+Credits: adapted in part from icm-architect (MIT, (c) 2026 Jake Van Clief). Persistence, retrieval and correction ideas after Bas Rosario's Memory Engineering series and Jake Van Clief's Clief Notes course (Foundation and David's Corner lessons), restated in our own words.
