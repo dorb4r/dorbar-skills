@@ -1,0 +1,17 @@
+{
+  "name": "verified-web-edit",
+  "version": "0.1.0",
+  "description": "Change live web pages (CMS, course platform, docs site, store listing) through a browser agent with a verify-after-each-edit loop and one result row per page; stops on the first mismatch.",
+  "author": {
+    "name": "Dor Bar",
+    "email": "dor.b4r@gmail.com"
+  },
+  "license": "MIT",
+  "keywords": [
+    "browser-automation",
+    "CMS",
+    "content-update",
+    "verification",
+    "web-edit"
+  ]
+}
