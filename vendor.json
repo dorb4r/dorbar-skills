@@ -10,8 +10,14 @@
         {
           "path": "scripts/links.py",
           "copies": [
-            "plugins/layered-context/skills/layered-context/scripts/links.py",
             "plugins/knowledge-from-sources/skills/knowledge-from-sources/scripts/links.py"
+          ]
+        },
+        {
+          "path": "scripts/links.py",
+          "fork": "layered-context guards: Inputs heading by prefix, #section stripped, 'Do NOT load' skipped, inputs outside runs/ strict, ROOT = cwd; candidates to offer upstream",
+          "copies": [
+            "plugins/layered-context/skills/layered-context/scripts/links.py"
           ]
         },
         {

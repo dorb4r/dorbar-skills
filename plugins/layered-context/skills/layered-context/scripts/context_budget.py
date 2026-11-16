@@ -2,9 +2,10 @@
 """Report context files that break their size budget, and stage loads that break the step budget.
 Exit 1 if anything is over budget (or, with --provenance, if a belief line lacks provenance).
 
-Copy to scripts/ in a repo and run from anywhere:
-    python -I scripts/context_budget.py [ROOT] [--provenance] [--json]
-ROOT defaults to the folder that holds scripts/. Standard library only.
+Shared, not copied: repos run it through the context-guards action or context_guards.py (see
+the layered-context skill, reference.md -> Wiring the guards). Direct use:
+    python3 -I context_budget.py [ROOT] [--provenance] [--json]
+ROOT defaults to the current directory. Standard library only.
 
 Budgets (tokens are estimated as characters / 4; override any of them in ROOT/.context-budget.json,
 e.g. {"AGENTS.md": {"lines": 80}, "step_tokens": 10000}):
@@ -12,13 +13,22 @@ e.g. {"AGENTS.md": {"lines": 80}, "step_tokens": 10000}):
   CLAUDE.md, GEMINI.md        3 lines                  (one-line pointer to AGENTS.md)
   any CONTEXT.md             80 lines,   800 tokens   (router or stage contract)
   references/**/*.md        200 lines,  2000 tokens   (factory files)
-  a stage's step load                   8000 tokens   (AGENTS.md + its CONTEXT.md + every
-                                                       backticked path under its Inputs heading)
+  a contract's step load                8000 tokens   (AGENTS.md, or CLAUDE.md when there is no
+                                                       AGENTS.md, + the CONTEXT.md + every backticked
+                                                       path under its Inputs heading)
 Skipped: dot-folders, node_modules/, _archive/, _templates/, runs/, raw/.
 
---provenance also checks belief files (references/decisions.md, references/app-state.md): every
-top-level bullet must end with a provenance note containing "since" and a date (YYYY-MM-DD), and
-no bullet may start with "Update:" (stacked corrections - rewrite the original line instead).
+The step load is computed for every CONTEXT.md that has an Inputs heading (stage contracts and area
+contracts such as backend/CONTEXT.md alike). Inputs format, shared with links.py: a heading whose
+text starts with "Inputs", then a bulleted list of backticked paths; a path may end in #section
+(stripped before resolving, the whole file counts); a bullet starting with "Do NOT load" is skipped.
+
+--provenance also checks belief files: references/decisions.md, references/decisions/**/*.md,
+references/app-state.md and references/app-state/**/*.md (CONTEXT.md and README.md excluded;
+override with "belief_globs" in .context-budget.json). Every top-level bullet must end with a
+provenance note containing "since" and a date (YYYY-MM-DD), and no bullet may start with "Update:"
+(stacked corrections - rewrite the original line instead). It fails when no belief file matches,
+so a rename can't turn the check into a silent pass.
 """
 import json
 import re
@@ -33,7 +43,9 @@ DEFAULTS = {
     "reference": {"lines": 200, "tokens": 2000},
     "step_tokens": 8000,
 }
-BELIEF_FILES = ("references/decisions.md", "references/app-state.md")
+BELIEF_GLOBS = ["references/decisions.md", "references/decisions/**/*.md",
+                "references/app-state.md", "references/app-state/**/*.md"]
+NOT_BELIEFS = {"CONTEXT.md", "README.md"}
 TICK = re.compile(r"`([^`\s]+)`")
 DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 
@@ -75,6 +87,18 @@ def inputs_of(contract_text):
     return out
 
 
+def has_inputs(contract_text):
+    return any(line.startswith("#") and line.lstrip("#").strip().lower().startswith("inputs")
+               for line in contract_text.splitlines())
+
+
+def belief_files(root, globs):
+    found = set()
+    for g in globs:
+        found.update(p for p in root.glob(g) if p.is_file() and p.name not in NOT_BELIEFS)
+    return sorted(found)
+
+
 def resolve(path, contract, root):
     path = path.split("#", 1)[0]
     for base in (contract.parent, root):
@@ -88,16 +112,16 @@ def resolve(path, contract, root):
 
 def main(argv):
     args = [a for a in argv if not a.startswith("--")]
-    root = Path(args[0]).resolve() if args else Path(__file__).resolve().parent.parent
+    root = Path(args[0]).resolve() if args else Path.cwd()
     cfg = json.loads(json.dumps(DEFAULTS))
     override = root / ".context-budget.json"
     if override.is_file():
         for k, v in json.loads(override.read_text()).items():
             cfg[k] = {**cfg.get(k, {}), **v} if isinstance(v, dict) else v
 
-    rows, problems = [], []
-    agents = root / "AGENTS.md"
-    agents_tokens = tokens(agents.read_text(encoding="utf-8", errors="replace")) if agents.is_file() else 0
+    rows, problems, notes = [], [], []
+    base = next((root / n for n in ("AGENTS.md", "CLAUDE.md") if (root / n).is_file()), None)
+    base_tokens = tokens(base.read_text(encoding="utf-8", errors="replace")) if base else 0
 
     for p, rel in walk(root):
         kind, b = budget_for(rel, cfg)
@@ -111,8 +135,8 @@ def main(argv):
         if over:
             problems.append(f"{rel}: {'; '.join(over)}")
 
-        if kind == "CONTEXT.md" and "stages" in rel.parts:
-            load, missing = agents_tokens + n_tok, []
+        if kind == "CONTEXT.md" and has_inputs(text):
+            load, missing = base_tokens + n_tok, []
             for ref in inputs_of(text):
                 files = resolve(ref, p, root)
                 if not files:
@@ -121,28 +145,35 @@ def main(argv):
             status = "ok" if load <= cfg["step_tokens"] else f"step load ~{load} tokens > {cfg['step_tokens']}"
             rows.append((rel.parent.as_posix() + " (step load)", "step", None, load, status))
             if status != "ok":
-                problems.append(f"{rel.parent}: {status} - split the stage, tighten Inputs, or point at a section")
+                problems.append(f"{rel.parent}: {status} - split the contract, tighten Inputs, or point at a section")
 
     if "--provenance" in argv:
-        for bf in BELIEF_FILES:
-            p = root / bf
-            if not p.is_file():
-                continue
+        files = belief_files(root, cfg.get("belief_globs", BELIEF_GLOBS))
+        checked = 0
+        if not files:
+            problems.append("no belief files found (looked for " + ", ".join(cfg.get("belief_globs", BELIEF_GLOBS))
+                            + ") - set belief_globs in .context-budget.json if they moved")
+        for p in files:
+            bf = p.relative_to(root).as_posix()
             for i, line in enumerate(p.read_text(encoding="utf-8").splitlines(), 1):
                 if not re.match(r"^[-*] ", line):
                     continue
+                checked += 1
                 body = line[2:].strip()
                 if body.lower().startswith("update:"):
                     problems.append(f"{bf}:{i}: stacked 'Update:' line - rewrite the original belief in place")
                 elif "since" not in body.lower() or not DATE.search(body):
                     problems.append(f"{bf}:{i}: belief without provenance (since YYYY-MM-DD, by <who>, ref <PR|commit>)")
+        notes.append(f"provenance: {checked} belief line(s) checked in {len(files)} file(s)")
 
     if "--json" in argv:
-        print(json.dumps({"rows": rows, "problems": problems}, indent=1))
+        print(json.dumps({"rows": rows, "notes": notes, "problems": problems}, indent=1))
     else:
         w = max([len(r[0]) for r in rows] + [10])
         for path, kind, n_lines, n_tok, status in rows:
             print(f"{path:<{w}}  {kind:<10}  {'' if n_lines is None else n_lines:>5}  ~{n_tok:>6}  {status}")
+        for note in notes:
+            print(note)
         print(f"\n{len(problems)} problem(s)" + (":" if problems else ""))
         for pr in problems:
             print("  " + pr)

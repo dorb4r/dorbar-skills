@@ -1,6 +1,6 @@
 # Layered context — templates and procedures
 
-Copy these, then replace every line with project-real content. Contents: Folder shapes · Interview mode · Layer 0 `AGENTS.md` · Layer 1 router · Layer 2 stage contract · Human checks and enforcing stops · Layer 3 belief files · Layer 3 standards · Let it harden · Wiring the scripts · Replication and seeded-defect tests · Restructure.
+Copy these, then replace every line with project-real content. Contents: Folder shapes · Interview mode · Layer 0 `AGENTS.md` · Layer 1 router · Layer 2 stage contract · Human checks and enforcing stops · Layer 3 belief files · Layer 3 standards · Let it harden · Wiring the guards · Replication and seeded-defect tests · Restructure.
 
 ## Folder shapes
 
@@ -16,7 +16,8 @@ Copy these, then replace every line with project-real content. Contents: Folder 
         app-state.md            #   beliefs: what the system does now
         decisions.md            #   beliefs: decisions in force now
       _archive/                 # retired, never read
-      scripts/links.py, scripts/context_budget.py
+      .context-budget.json      # optional: this repo's own limits, each with a "why"
+      .github/workflows/context.yml   # calls the shared context-guards action (no script copies)
 
 **Pipeline** (a repeated multi-stage workflow) adds:
 
@@ -158,8 +159,8 @@ Notes on the contract:
 
     N. Fold in: merge this run's lasting decisions into `references/decisions.md` (rewrite the
        affected lines in place, with provenance); update `references/app-state.md` for any changed
-       behaviour; move `runs/<task-id>/` to `_archive/runs/`; run
-       `python -I scripts/context_budget.py --provenance` and `python -I scripts/links.py` — both exit 0.
+       behaviour; move `runs/<task-id>/` to `_archive/runs/`; run the context guards
+       (reference.md → Wiring the guards, local command) — exit 0.
 
 ## Human checks and enforcing stops
 
@@ -223,21 +224,49 @@ Rules:
 
 ---
 
-## Wiring the scripts
+## Wiring the guards
 
-Both scripts are standard-library Python, run with `-I`, and treat the folder above `scripts/` as the root.
+The guards live in one place: this skill's `scripts/` in `dorb4r/dorbar-skills` (public), with their license beside them. Product repos **use** them, pinned to a commit SHA; they never copy them, so a fix lands everywhere by bumping one SHA.
 
-- `links.py` (from icm-architect, MIT): every relative link, `@import` and Inputs path resolves.
-- `context_budget.py`: file budgets, per-stage step load, and (`--provenance`) belief-line hygiene. Override budgets in `.context-budget.json`.
+- `links.py` (adapted from icm-architect, MIT): every relative link, `@import` and Inputs path resolves; `#section` is stripped; inputs outside `runs/` must exist.
+- `context_budget.py`: file budgets, step load for every `CONTEXT.md` with an Inputs heading, and belief-line provenance (`references/decisions*`, `references/app-state*`, globbed; none found is a failure).
+- `context_guards.py`: runs both; exit 1 if either fails.
 
-CI (GitHub Actions step):
+Inputs format both scripts parse: a heading starting with "Inputs", then bullets of backticked paths; a path may end in `#section`; a bullet starting "Do NOT load" is skipped.
 
-    - name: Context guards
-      run: |
-        python -I scripts/links.py
-        python -I scripts/context_budget.py --provenance
+**The repo keeps only its config.** `.context-budget.json` overrides limits, each with a reason:
 
-Or pre-commit, as a local hook running the same two commands.
+    {"CONTEXT.md": {"lines": 80, "tokens": 1000, "why": "<reason, who, date>"},
+     "belief_globs": ["references/decisions/**/*.md"]}
+
+**CI** — `.github/workflows/context.yml`:
+
+    name: context
+    on:
+      pull_request:
+      push:
+        branches: [main]
+    permissions:
+      contents: read
+    jobs:
+      guards:
+        name: context guards
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        steps:
+          - uses: actions/checkout@v4
+          - uses: dorb4r/dorbar-skills/.github/actions/context-guards@<commit sha>  # layered-context@<version>
+            with:
+              blocking: "true"      # "false" while the repo is mid-migration: warn only
+              # root: "."  skip: "vendor docs-site"  provenance: "true"
+
+**Local** (same code, same pin):
+
+    uvx --from "git+https://github.com/dorb4r/dorbar-skills@<commit sha>#subdirectory=plugins/layered-context/skills/layered-context/scripts" context-guards
+
+`pipx run --spec "<same git URL>" context-guards` works too. An agent with this skill installed runs `python3 -I <this skill's dir>/scripts/context_guards.py <repo root>`.
+
+**Updating the pin.** Bump the SHA in the workflow (and any local alias) in its own PR; the guard output in that PR shows what the new version flags. The action's self-test (`tests/context-guards/`) runs in `dorbar-skills` before any SHA is published.
 
 ---
 
@@ -270,4 +299,4 @@ Diff its output against the owner's. Each difference and each listed guess is an
 4. **Find every referrer before proposing a move.** `grep -rn "<filename>"` across the repo; CI workflows; `.claude/` agents, hooks, commands and settings; docs sites; scripts; other repos and scheduled jobs (ask the owner — nothing in the tree names them). A file with a live referrer moves only if every referrer is updated in the same change.
 5. **Propose before moving.** Present the target tree and a migration map (old path → new path, role, referrers). Get approval.
 6. **Migrate on a branch.** `git mv` (history follows). Before renaming, check case-folded collisions (`context.md` vs `CONTEXT.md` on macOS/Windows). Verify parity (file count, content), dedupe toward one home per fact, convert decisions to belief format, reduce `CLAUDE.md` to `@AGENTS.md`.
-7. **Validate:** both scripts exit 0, then the walk test.
+7. **Validate:** the context guards exit 0, then the walk test.

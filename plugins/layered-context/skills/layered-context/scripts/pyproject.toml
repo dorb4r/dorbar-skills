@@ -1,0 +1,19 @@
+# Lets repos run the shared guards locally at a pinned commit, without copying them:
+#   uvx --from "git+https://github.com/dorb4r/dorbar-skills@<commit sha>#subdirectory=plugins/layered-context/skills/layered-context/scripts" context-guards
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "layered-context-guards"
+version = "0.2.0"
+description = "Link, budget and provenance checks for a layered (ICM) agent-context repo."
+requires-python = ">=3.9"
+license = { text = "MIT (context_budget.py, context_guards.py); links.py from icm-architect, MIT - see LICENSE-icm-architect" }
+
+[project.scripts]
+context-guards = "context_guards:main"
+
+[tool.setuptools]
+py-modules = ["context_guards", "links", "context_budget"]
+license-files = ["LICENSE-icm-architect"]

@@ -46,7 +46,7 @@ Defaults, not dogma: break one on purpose and write why in the nearest `CONTEXT.
 2. **Catalogs route; shelves hold.** `AGENTS.md` and `CONTEXT.md` point at content and store almost none. A routing file that grows is absorbing payload: move it to a shelf, leave a pointer.
 3. **Contracts scope the load.** Every stage contract lists exact backticked Inputs (Working / Reference / Example), a `Do NOT load:` line, and stops if an input is missing.
 4. **Every step ends at one concrete Check** — a command's exit code, a reviewer sub-agent, or a person. A non-person check writes `runs/<id>/NN_check.md`, first line `pass` or `fail: <why>`; a fail stops the run. Each contract names its **human check** (who looks at what), placed only where taste changes the result; the rest runs. Anything that must never happen is blocked by a permission or hook, not only by text (`reference.md` → Human checks and enforcing stops). Checks are single-shot by default; one that may be retried → **bounded-loop**; a repeated judgement call → **decision-gates** (both in the agent-workflows plugin).
-5. **One home per fact.** A link beats a copy. Links and Inputs paths are relative and must resolve (`scripts/links.py`).
+5. **One home per fact.** A link beats a copy. Links and Inputs paths are relative and must resolve (the shared context guards check this).
 6. **Status lives on disk** — what exists in `runs/<id>/` plus check verdicts. Generated indexes are rebuilt by script, never hand-edited.
 7. **Plain text, first heading names the file and its job**, so `grep -rm1 '^# ' .` lists the tree.
 8. **Let it harden.** A step done the same way three or four times becomes a script, and the contract names its command (`pnpm test --filter api`); the script is diffed against a hand-done run before it takes over. Made the same fix twice? Edit the file that caused it. An instruction edit is a config change: one rule at a time, rerun the same task, keep the diff (`reference.md` → Let it harden). Fold a stage nobody edits; split a contract that keeps growing.
@@ -60,9 +60,9 @@ Defaults, not dogma: break one on purpose and write why in the nearest `CONTEXT.
 5. **Write Layer 2 contracts** (pipeline only): one `stages/NN_<name>/CONTEXT.md` each, from the template — Inputs, the skills/MCP tools it uses, Outputs, and its Check.
 6. **Build Layer 3 `references/`**: `standards.md`, `domain.md`, `app-state.md`, `decisions.md` — the last two in **belief format** (next section). Real content only; a file no step loads is dead weight.
 7. **Create Layer 4** `runs/.gitkeep` and `_archive/` (with a one-line `README.md`: retired; task work never reads it, audits may search it — see "Archive, don't load"). Plans live in `runs/<id>/`, never in `references/`.
-8. **Wire the guards**: copy `scripts/links.py` and `scripts/context_budget.py` from this skill into the repo's `scripts/` and run both in CI or pre-commit (`reference.md` → Wiring the scripts).
+8. **Wire the guards** from their one shared home: the repo gets a CI workflow calling the `context-guards` action pinned to a commit SHA, plus an optional `.context-budget.json` with its own limits. The scripts stay in this skill; the repo never holds a copy (`reference.md` → Wiring the guards).
 9. **Wire the lifecycle**: add the **fold-in** step to the delivery stage (next section) and name who owns it.
-10. **Walk test** (below). Done when it passes and both scripts exit 0.
+10. **Walk test** (below). Done when it passes and the context guards exit 0.
 
 ## Context lifecycle: keep the base small as features pile up
 The base files every agent loads must not grow with the feature count. The trade-off "know every decision vs. drown in conflicting ones" dissolves once **knowing** and **loading** are separate: agents load what is true *now*; history stays in git and `_archive/`, reachable on demand.

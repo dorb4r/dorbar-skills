@@ -1,0 +1,39 @@
+# Self-test for the shared context-guards action: the good fixture must pass, the bad one must
+# fail. Other repos pin this action by commit SHA, so a broken guard is caught here first.
+name: context-guards self-test
+
+on:
+  pull_request:
+    paths:
+      - ".github/actions/context-guards/**"
+      - "plugins/layered-context/skills/layered-context/scripts/**"
+      - "tests/context-guards/**"
+      - ".github/workflows/context-guards-selftest.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  selftest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: good fixture passes
+        uses: ./.github/actions/context-guards
+        with:
+          root: tests/context-guards/good
+      - name: bad fixture fails
+        id: bad
+        continue-on-error: true
+        uses: ./.github/actions/context-guards
+        with:
+          root: tests/context-guards/bad
+      - name: assert the bad fixture failed
+        if: steps.bad.outcome != 'failure'
+        run: echo "::error::the bad fixture passed the guards" && exit 1
+      - name: non-blocking mode only warns
+        uses: ./.github/actions/context-guards
+        with:
+          root: tests/context-guards/bad
+          blocking: "false"

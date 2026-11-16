@@ -24,7 +24,7 @@ Paste this as the `## Check` section of `stages/NN_<name>/CONTEXT.md` in place o
 
     Files: attempt K → `runs/<id>/03_attempt-K.md`; its results → `runs/<id>/03_attempt-K_check.md`.
     After each evaluation run
-    `python -I scripts/loop_decide.py runs/<id> 03 --budget 3 --output runs/<id>/03_draft.md`
+    `python -I <bounded-loop skill dir>/scripts/loop_decide.py runs/<id> 03 --budget 3 --output runs/<id>/03_draft.md`
     (exit 3 = again; 0 = pass; 1 = fail, the run stops; 4 = an attempt is blocked, the run stops
     and the blocker goes to a person). It writes `runs/<id>/03_check.md`.
     An attempt that cannot run, or whose rubric line a decision gate routed to a person, gets a
