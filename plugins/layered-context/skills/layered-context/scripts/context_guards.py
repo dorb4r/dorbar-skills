@@ -4,8 +4,8 @@ context_budget.py --provenance (file budgets, step loads, belief-line provenance
 Exit 1 if either fails, 2 on bad usage.
 
 One shared copy, used from three places (never copy these scripts into a product repo):
-  CI      uses: dorb4r/dorbar-skills/.github/actions/context-guards@<commit sha>
-  local   uvx --from "git+https://github.com/dorb4r/dorbar-skills@<commit sha>#subdirectory=plugins/layered-context/skills/layered-context/scripts" context-guards
+  CI      uses: dorb4r/dorbar-skills/.github/actions/context-guards@<ref: layered-context-v<version> or a commit sha>
+  local   uvx --from "git+https://github.com/dorb4r/dorbar-skills@<ref>#subdirectory=plugins/layered-context/skills/layered-context/scripts" context-guards
   agent   python3 -I <layered-context skill dir>/scripts/context_guards.py <repo root>
 
     context_guards.py [ROOT] [--skip FOLDER ...] [--no-provenance] [--summary FILE]

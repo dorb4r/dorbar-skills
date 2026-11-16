@@ -226,7 +226,9 @@ Rules:
 
 ## Wiring the guards
 
-The guards live in one place: this skill's `scripts/` in `dorb4r/dorbar-skills` (public), with their license beside them. Product repos **use** them, pinned to a commit SHA; they never copy them, so a fix lands everywhere by bumping one SHA.
+The guards live in one place: this skill's `scripts/` in `dorb4r/dorbar-skills` (public), with their license beside them. Product repos **use** them, pinned to a ref; they never copy them, so a fix lands everywhere by bumping one ref.
+
+**The ref (`<ref>` below):** a release tag, `layered-context-v<version>` (e.g. `layered-context-v0.1.0`; list them with `git ls-remote --tags https://github.com/dorb4r/dorbar-skills 'layered-context-v*'`), or the full commit SHA that tag points to. The tag reads well; the SHA can never move. Use the SHA where a repo's policy requires immutable pins.
 
 - `links.py` (adapted from icm-architect, MIT): every relative link, `@import` and Inputs path resolves; `#section` is stripped; inputs outside `runs/` must exist.
 - `context_budget.py`: file budgets, step load for every `CONTEXT.md` with an Inputs heading, and belief-line provenance (`references/decisions*`, `references/app-state*`, globbed; none found is a failure).
@@ -255,18 +257,18 @@ Inputs format both scripts parse: a heading starting with "Inputs", then bullets
         timeout-minutes: 5
         steps:
           - uses: actions/checkout@v4
-          - uses: dorb4r/dorbar-skills/.github/actions/context-guards@<commit sha>  # layered-context@<version>
+          - uses: dorb4r/dorbar-skills/.github/actions/context-guards@<ref>   # e.g. layered-context-v0.1.0
             with:
               blocking: "true"      # "false" while the repo is mid-migration: warn only
               # root: "."  skip: "vendor docs-site"  provenance: "true"
 
 **Local** (same code, same pin):
 
-    uvx --from "git+https://github.com/dorb4r/dorbar-skills@<commit sha>#subdirectory=plugins/layered-context/skills/layered-context/scripts" context-guards
+    uvx --from "git+https://github.com/dorb4r/dorbar-skills@<ref>#subdirectory=plugins/layered-context/skills/layered-context/scripts" context-guards
 
 `pipx run --spec "<same git URL>" context-guards` works too. An agent with this skill installed runs `python3 -I <this skill's dir>/scripts/context_guards.py <repo root>`.
 
-**Updating the pin.** Bump the SHA in the workflow (and any local alias) in its own PR; the guard output in that PR shows what the new version flags. The action's self-test (`tests/context-guards/`) runs in `dorbar-skills` before any SHA is published.
+**Updating the pin.** Bump the ref in the workflow (and any local alias) in its own PR; the guard output in that PR shows what the new version flags. The action's self-test (`tests/context-guards/`) runs in `dorbar-skills` before any release is tagged.
 
 ---
 
