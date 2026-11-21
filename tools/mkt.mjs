@@ -8,6 +8,7 @@
 //   mkt release [--dry-run] [--plugin <name>] [--no-git]         auto-bump from Conventional Commits, sync, tag
 //   mkt bump <plugin> <patch|minor|major>                       manual single-plugin bump
 //   mkt validate                                                 validate manifests + run `claude plugin validate`
+//   mkt check-bump [--base <ref>]                                fail when a plugin's files changed since <ref> without a version bump
 //   mkt install-hooks                                            install the commit-msg hook (conventional-commit lint)
 //   mkt vendor [--diff] | vendor update [--to <sha>]             check/update vendored files (vendor.json); --diff prints forks vs upstream
 //
@@ -52,6 +53,10 @@ function bumpVer(v, level) {
 }
 const LEVEL_RANK = { patch: 1, minor: 2, major: 3 };
 function maxLevel(a, b) { if (!a) return b; if (!b) return a; return LEVEL_RANK[a] >= LEVEL_RANK[b] ? a : b; }
+function levelBetween(from, to) {
+  const a = parseVer(from), b = parseVer(to);
+  return b.major !== a.major ? "major" : b.minor !== a.minor ? "minor" : "patch";
+}
 function cmpVerDesc(a, b) {
   const pa = parseVer(a), pb = parseVer(b);
   return (pb.major - pa.major) || (pb.minor - pa.minor) || (pb.patch - pa.patch);
@@ -232,7 +237,9 @@ function cmdBump(args) {
   const to = bumpVer(from, level);
   p.manifest.version = to;
   writeJSON(p.manifestPath, p.manifest);
-  prependChangelog(join(p.dir, "CHANGELOG.md"), to, [], `Manual ${level} bump.`);
+  for (const py of pyprojectsIn(p.dir)) setPyprojectVersion(py, to);
+  const { lines } = classifyCommits(commitsTouching(p.dir, lastTagFor(name)));
+  prependChangelog(join(p.dir, "CHANGELOG.md"), to, lines, `Manual ${level} bump.`);
   syncMarketplace();
   console.log(c.grn("bumped ") + `${name} ${from} → ${to}`);
 }
@@ -254,6 +261,12 @@ function cmdRelease(args) {
       changes.push({ p, from: p.manifest.version, to: p.manifest.version, level: "baseline", lines, baseline: true });
       continue;
     }
+    const tagged = tag.slice(p.name.length + 2);
+    if (cmpVerDesc(tagged, p.manifest.version) > 0) {
+      // already bumped in its PR (mkt bump, enforced by mkt check-bump): tag that version as is.
+      changes.push({ p, from: tagged, to: p.manifest.version, level: levelBetween(tagged, p.manifest.version), lines, preBumped: true });
+      continue;
+    }
     if (!level) continue; // nothing release-worthy
     const to = bumpVer(p.manifest.version, level);
     changes.push({ p, from: p.manifest.version, to, level, lines });
@@ -269,7 +282,7 @@ function cmdRelease(args) {
 
   console.log(c.bold(flags["dry-run"] ? "DRY RUN — planned release:" : "Releasing:"));
   for (const ch of changes) {
-    console.log(`  ${ch.p.name.padEnd(26)} ${ch.from} → ${c.grn(ch.to)} ${ch.baseline ? c.dim("(baseline tag)") : c.dim(`(${ch.level})`)}`);
+    console.log(`  ${ch.p.name.padEnd(26)} ${ch.from} → ${c.grn(ch.to)} ${ch.baseline ? c.dim("(baseline tag)") : ch.preBumped ? c.dim(`(${ch.level}, bumped in its PR)`) : c.dim(`(${ch.level})`)}`);
   }
   if (marketLevel) console.log(`  ${"marketplace".padEnd(26)} ${mkt.version} → ${c.grn(marketTo)} ${c.dim(`(${marketLevel})`)}`);
 
@@ -277,7 +290,7 @@ function cmdRelease(args) {
 
   // apply
   for (const ch of changes) {
-    if (!ch.baseline) {
+    if (!ch.baseline && !ch.preBumped) {
       ch.p.manifest.version = ch.to;
       writeJSON(ch.p.manifestPath, ch.p.manifest);
       for (const py of pyprojectsIn(ch.p.dir)) setPyprojectVersion(py, ch.to);
@@ -294,7 +307,7 @@ function cmdRelease(args) {
 
   if (flags["no-git"]) { console.log(c.grn("done") + c.dim(" (files written; skipped git commit/tag)")); return; }
 
-  const bumped = changes.filter(c => !c.baseline);
+  const bumped = changes.filter(c => !c.baseline && !c.preBumped);
   if (bumped.length || marketLevel) {
     // a baseline-only release writes no files, so there is nothing to commit — just tag.
     git(["add", "-A"]);
@@ -322,6 +335,8 @@ function cmdValidate() {
       if (v !== p.manifest.version) { console.error(c.red(`✗ ${p.name}: ${relative(ROOT, py)} version "${v}" != plugin.json "${p.manifest.version}"`)); ok = false; }
     }
     if (!listed.has(p.name)) { console.error(c.yel(`! ${p.name}: not in marketplace.json (run: mkt sync)`)); }
+    const entry = (mkt.plugins || []).find(e => e.name === p.name);
+    if (entry && entry.version !== p.manifest.version) { console.error(c.red(`✗ ${p.name}: marketplace.json version "${entry.version}" != plugin.json "${p.manifest.version}" (run: mkt sync)`)); ok = false; }
   }
   // delegate deep validation to claude CLI if present
   try {
@@ -333,6 +348,40 @@ function cmdValidate() {
     else console.log(c.dim("(claude plugin validate unavailable — skipped deep validation)"));
   }
   console.log(ok ? c.grn("✓ validation passed") : c.red("✗ validation failed"));
+  process.exit(ok ? 0 : 1);
+}
+
+// ---------- version gate for PRs ----------
+// `claude plugin update` only sees a new version, so any change to a plugin's files must ship with
+// a version bump (mkt bump), or installed copies never update. CHANGELOG.md alone is exempt.
+function cmdCheckBump(args) {
+  const flags = parseFlags(args);
+  if (!hasGit()) die("check-bump needs a git repository");
+  const base = typeof flags.base === "string" ? flags.base : "origin/main";
+  const mb = git(["merge-base", base, "HEAD"], { allowFail: true });
+  if (!mb) die(`no merge base with ${base} (fetch it first, e.g. git fetch origin main)`);
+  const changed = git(["diff", "--name-only", mb, "HEAD"]).split("\n").filter(Boolean);
+  let ok = true;
+  for (const p of listPlugins()) {
+    const rel = relative(ROOT, p.dir) + "/";
+    const files = changed.filter(f => f.startsWith(rel) && f !== rel + "CHANGELOG.md");
+    if (!files.length) continue;
+    const manifestRel = relative(ROOT, p.manifestPath);
+    let before = null;
+    try { before = JSON.parse(git(["show", `${mb}:${manifestRel}`], { allowFail: true }) || "null")?.version ?? null; } catch { before = null; }
+    const now = p.manifest.version;
+    if (before === null) { console.log(c.dim(`${p.name}: new plugin at ${now}`)); continue; }
+    if (!parseVer(now) || cmpVerDesc(before, now) <= 0) {
+      console.error(c.red(`✗ ${p.name}: ${files.length} file(s) changed but version is still ${now} (base ${before})`));
+      for (const f of files.slice(0, 5)) console.error(c.dim(`    ${f}`));
+      console.error(`  fix: ./bin/mkt bump ${p.name} <patch|minor|major>`);
+      ok = false;
+    } else if (git(["tag", "--list", tagFor(p.name, now)], { allowFail: true })) {
+      console.error(c.red(`✗ ${p.name}: ${now} is already tagged ${tagFor(p.name, now)}; bump past it`));
+      ok = false;
+    } else console.log(c.grn(`✓ ${p.name}: ${before} → ${now}`));
+  }
+  console.log(ok ? c.grn("✓ every changed plugin is bumped") : c.red("✗ version bump missing"));
   process.exit(ok ? 0 : 1);
 }
 
@@ -459,6 +508,7 @@ const HELP = `mkt — dorbar-skills marketplace toolkit
   mkt release [--dry-run] [--plugin <name>] [--no-git]         auto-bump (Conventional Commits), sync, tag
   mkt bump <plugin> <patch|minor|major>                        manual single-plugin bump
   mkt validate                                                 validate manifests + claude plugin validate
+  mkt check-bump [--base <ref>]                                fail when a plugin changed since <ref> (default origin/main) without a version bump
   mkt install-hooks                                            install commit-msg conventional-commit lint
   mkt vendor [--diff] | vendor update [--to <sha>]             check vendored files against upstream (vendor.json); --diff shows each fork
 `;
@@ -471,6 +521,7 @@ switch (cmd) {
   case "release": cmdRelease(rest); break;
   case "bump": cmdBump(rest); break;
   case "validate": cmdValidate(); break;
+  case "check-bump": cmdCheckBump(rest); break;
   case "install-hooks": cmdInstallHooks(); break;
   case "vendor": await cmdVendor(rest); break;
   case undefined: case "help": case "--help": case "-h": console.log(HELP); break;

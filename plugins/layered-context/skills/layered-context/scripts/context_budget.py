@@ -22,6 +22,9 @@ The step load is computed for every CONTEXT.md that has an Inputs heading (stage
 contracts such as backend/CONTEXT.md alike). Inputs format, shared with links.py: a heading whose
 text starts with "Inputs", then a bulleted list of backticked paths; a path may end in #section
 (stripped before resolving, the whole file counts); a bullet starting with "Do NOT load" is skipped.
+A backticked token counts as a path only when it looks like one: no spaces or template marks, and
+a file extension or a first folder that exists (so `go test`, `origin/main` and a lone `/` are
+skipped). A path that resolves outside ROOT, or that does not exist (outside runs/), is a problem.
 
 --provenance also checks belief files: references/decisions.md, references/decisions/**/*.md,
 references/app-state.md and references/app-state/**/*.md (CONTEXT.md and README.md excluded;
@@ -46,7 +49,7 @@ DEFAULTS = {
 BELIEF_GLOBS = ["references/decisions.md", "references/decisions/**/*.md",
                 "references/app-state.md", "references/app-state/**/*.md"]
 NOT_BELIEFS = {"CONTEXT.md", "README.md"}
-TICK = re.compile(r"`([^`\s]+)`")
+TICK = re.compile(r"`([^`]+)`")  # pairs backticks left to right; non-paths are filtered later
 DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 
 
@@ -99,15 +102,44 @@ def belief_files(root, globs):
     return sorted(found)
 
 
+def looks_like_path(s, bases):
+    """True when a backticked Inputs token names a repo path, not a command, a git ref or a URL.
+    Kept in step with looks_like_path in links.py."""
+    if not s.strip("/.") or any(c.isspace() for c in s) or any(c in s for c in "{}<>*?|$"):
+        return False
+    if re.match(r"^[a-z][a-z0-9+.-]*:", s, re.I):  # web link, scheme or drive letter
+        return False
+    if re.search(r"\.\w{1,5}$", s.rstrip("/")) or s.startswith("/"):
+        return True  # has an extension, or is absolute (reported as outside the repo)
+    first = s.split("/", 1)[0]
+    return "/" in s and any((b / first).exists() for b in bases)
+
+
+def inside(p, root):
+    return p != root and p.is_relative_to(root)
+
+
 def resolve(path, contract, root):
-    path = path.split("#", 1)[0]
+    """Files an input loads, or None when it is missing or resolves outside ROOT."""
     for base in (contract.parent, root):
         p = (base / path).resolve()
-        if p.is_file():
-            return [p]
-        if p.is_dir():
-            return [f for f in p.rglob("*.md")]
-    return []
+        if not inside(p, root):
+            continue
+        try:
+            if p.is_file():
+                return [p]
+            if p.is_dir():
+                return [f for f in p.rglob("*.md") if f.is_file() and inside(f.resolve(), root)]
+        except OSError:
+            return None
+    return None
+
+
+def read(p):
+    try:
+        return p.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ""
 
 
 def main(argv):
@@ -121,13 +153,13 @@ def main(argv):
 
     rows, problems, notes = [], [], []
     base = next((root / n for n in ("AGENTS.md", "CLAUDE.md") if (root / n).is_file()), None)
-    base_tokens = tokens(base.read_text(encoding="utf-8", errors="replace")) if base else 0
+    base_tokens = tokens(read(base)) if base else 0
 
     for p, rel in walk(root):
         kind, b = budget_for(rel, cfg)
         if not kind:
             continue
-        text = p.read_text(encoding="utf-8", errors="replace")
+        text = read(p)
         n_lines, n_tok = len(text.splitlines()), tokens(text)
         over = [f"{n_lines} lines > {b['lines']}" for _ in [0] if "lines" in b and n_lines > b["lines"]]
         over += [f"~{n_tok} tokens > {b['tokens']}" for _ in [0] if "tokens" in b and n_tok > b["tokens"]]
@@ -136,12 +168,17 @@ def main(argv):
             problems.append(f"{rel}: {'; '.join(over)}")
 
         if kind == "CONTEXT.md" and has_inputs(text):
-            load, missing = base_tokens + n_tok, []
+            load = base_tokens + n_tok
             for ref in inputs_of(text):
-                files = resolve(ref, p, root)
-                if not files:
-                    missing.append(ref)
-                load += sum(tokens(f.read_text(encoding="utf-8", errors="replace")) for f in files)
+                path = ref.split("#", 1)[0]
+                if not looks_like_path(path, (p.parent, root)):
+                    continue
+                files = resolve(path, p, root)
+                if files is None:
+                    if not path.startswith("runs/"):  # a run's output may not be made yet
+                        problems.append(f"{rel}: input `{ref}` not found in the repo")
+                    continue
+                load += sum(tokens(read(f)) for f in files)
             status = "ok" if load <= cfg["step_tokens"] else f"step load ~{load} tokens > {cfg['step_tokens']}"
             rows.append((rel.parent.as_posix() + " (step load)", "step", None, load, status))
             if status != "ok":
@@ -155,7 +192,7 @@ def main(argv):
                             + ") - set belief_globs in .context-budget.json if they moved")
         for p in files:
             bf = p.relative_to(root).as_posix()
-            for i, line in enumerate(p.read_text(encoding="utf-8").splitlines(), 1):
+            for i, line in enumerate(read(p).splitlines(), 1):
                 if not re.match(r"^[-*] ", line):
                     continue
                 checked += 1

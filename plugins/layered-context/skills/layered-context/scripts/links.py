@@ -2,6 +2,8 @@
 # From icm-architect (MIT, (c) 2026 Jake Van Clief) - https://github.com/RinDig/icm-architect - see LICENSE-icm-architect
 # Adapted for layered-context: Inputs headings match by prefix, #section is stripped, a "Do NOT load"
 # bullet is skipped, every input outside runs/ must exist, and ROOT defaults to the current directory.
+# Inputs tokens: backticks pair left to right, commands and git refs are not paths, and an input
+# must resolve inside ROOT.
 """List every relative link and input path that does not resolve. Exit 1 if there are any.
 
 Run through context_guards.py or the context-guards action, or directly:
@@ -15,7 +17,9 @@ folder named with --skip:
     Web links, #anchors, {placeholders} and [[wikilinks]] are not checked.
   - backticked paths in list items under an Inputs heading, relative to the file or to ROOT.
     Every input must exist, except one under runs/, which passes if its folder exists, since
-    this run's output may not be made yet.
+    this run's output may not be made yet. A token counts as a path only when it has no spaces or
+    template marks and has a file extension or a first folder that exists (`go test`, `origin/main`
+    and a lone `/` are skipped); a path that resolves outside ROOT is broken.
 
 Inputs format (the one both this script and context_budget.py parse): a heading whose text starts
 with "Inputs", then a bulleted list (- or *) of backticked paths. A path may end in #section
@@ -41,7 +45,7 @@ except Exception:
 
 SKIP = {"node_modules", "_archive", "_templates", "raw"}
 LINK = re.compile(r"\[[^\]]*\]\((<[^>]+>|[^)\s]+)\)")
-TICK = re.compile(r"`([^`\s]+)`")
+TICK = re.compile(r"`([^`]+)`")  # pairs backticks left to right; non-paths are filtered later
 HEADING = re.compile(r"^(#{1,6})\s+(.*?)\s*#*\s*$")
 LINK_KEYS = re.compile(r"^(?:consumes|produces):\s*(.+)$", re.M)
 IMPORT = re.compile(r"^@(\S+\.md)\s*$")
@@ -82,10 +86,21 @@ def lines_outside_fences(body):
             yield line
 
 
-def looks_like_path(s):
-    if any(c in s for c in "{}<>*?|") or re.match(r"^[a-z]+:", s):
+def looks_like_path(s, bases):
+    """True when a backticked Inputs token names a repo path, not a command, a git ref or a URL.
+    Kept in step with looks_like_path in context_budget.py."""
+    if not s.strip("/.") or any(c.isspace() for c in s) or any(c in s for c in "{}<>*?|$"):
         return False
-    return "/" in s or bool(re.search(r"\.\w{1,5}$", s))
+    if re.match(r"^[a-z][a-z0-9+.-]*:", s, re.I):  # web link, scheme or drive letter
+        return False
+    if re.search(r"\.\w{1,5}$", s.rstrip("/")) or s.startswith("/"):
+        return True  # has an extension, or is absolute (reported as outside the repo)
+    first = s.split("/", 1)[0]
+    return "/" in s and any((b / first).exists() for b in bases)
+
+
+def inside(p, root):
+    return p != root and p.is_relative_to(root)
 
 
 def main():
@@ -141,11 +156,11 @@ def main():
                     and not line.lower().lstrip("-* ").startswith("do not load")):
                 for m in TICK.finditer(line):
                     p = m.group(1).split("#", 1)[0]
-                    if not p or not looks_like_path(p):
+                    if not looks_like_path(p, (f.parent, root)):
                         continue
                     strict = not p.startswith("runs/")  # a run's output may not be made yet
                     checked += 1
-                    hits = [(f.parent / p).resolve(), (root / p).resolve()]
+                    hits = [h for h in ((f.parent / p).resolve(), (root / p).resolve()) if inside(h, root)]
                     if not any(h.exists() or (not strict and h.parent.is_dir()) for h in hits):
                         broken.append(f"{rel}: input `{p}`")
         nodes.append({"node": rel, "type": field(front, "type"), "title": title or f.stem,
