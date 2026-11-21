@@ -234,7 +234,7 @@ The guards live in one place: this skill's `scripts/` in `dorb4r/dorbar-skills` 
 - `context_budget.py`: file budgets, step load for every `CONTEXT.md` with an Inputs heading, and belief-line provenance (`references/decisions*`, `references/app-state*`, globbed; none found is a failure).
 - `context_guards.py`: runs both; exit 1 if either fails.
 
-Inputs format both scripts parse: a heading starting with "Inputs", then bullets of backticked paths; a path may end in `#section`; a bullet starting "Do NOT load" is skipped.
+Inputs format both scripts parse: a heading starting with "Inputs", then bullets of backticked paths; a path may end in `#section`; a bullet starting "Do NOT load" is skipped. A backticked token counts as a path only with no spaces or `<placeholders>` and a file extension or an existing first folder, so commands and refs (`go test`, `origin/main`) can share a bullet; a path that resolves outside the repo, or is missing outside `runs/`, fails.
 
 **The repo keeps only its config.** `.context-budget.json` overrides limits, each with a reason:
 

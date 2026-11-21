@@ -61,7 +61,7 @@
       "name": "layered-context",
       "source": "./plugins/layered-context",
       "description": "Layered, agent-readable context (ICM) for software projects: scaffold/restructure AGENTS.md + CONTEXT.md + references/ + runs/, keep it small as features pile up (context-hygiene), map a codebase with path:line cards and an impact index (system-map), and pause/resume tasks (session-handoff).",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "author": {
         "name": "Dor Bar",
         "email": "dor.b4r@gmail.com"

@@ -19,6 +19,8 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
+      - name: regression tests (Inputs tokens, missing and outside paths)
+        run: python3 -m unittest discover -s tests/context-guards -v
       - name: good fixture passes
         uses: ./.github/actions/context-guards
         with:

@@ -9,7 +9,7 @@
 //   mkt bump <plugin> <patch|minor|major>                       manual single-plugin bump
 //   mkt validate                                                 validate manifests + run `claude plugin validate`
 //   mkt install-hooks                                            install the commit-msg hook (conventional-commit lint)
-//   mkt vendor [--diff] | vendor update [--to <sha>]             check/update vendored files (vendor.json); --diff prints forks vs upstream
+//   mkt vendor [update [--to <sha>]]                             check/update vendored third-party files (vendor.json)
 //
 // Design: each plugin's `.claude-plugin/plugin.json` is the source of truth.
 // marketplace.json's plugins[] is generated; never hand-edit plugin entries.
@@ -92,32 +92,13 @@ function listPlugins() {
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-// Release tags are <plugin>-v<version> (e.g. layered-context-v0.1.0): one "@"-free ref that works in
-// git URLs (uvx/pipx "git+https://...@<ref>") and in GitHub Actions `uses: ...@<ref>`.
-const tagFor = (name, version) => `${name}-v${version}`;
-
-function pyprojectsIn(dir) {
-  const out = [];
-  for (const e of readdirSync(dir, { withFileTypes: true })) {
-    if (e.name.startsWith(".") || ["node_modules", "build"].includes(e.name)) continue;
-    const p = join(dir, e.name);
-    if (e.isDirectory()) out.push(...pyprojectsIn(p));
-    else if (e.name === "pyproject.toml") out.push(p);
-  }
-  return out;
-}
-const PY_VERSION = /^version\s*=\s*"([^"]*)"/m;
-function setPyprojectVersion(file, version) {
-  writeFileSync(file, readFileSync(file, "utf8").replace(PY_VERSION, `version = "${version}"`));
-}
-
 function lastTagFor(name) {
   if (!hasGit()) return null;
-  const tags = git(["tag", "--list", `${name}-v*`], { allowFail: true }).split("\n").filter(Boolean)
-    .map(t => t.slice(name.length + 2))
+  const tags = git(["tag", "--list", `${name}@*`], { allowFail: true }).split("\n").filter(Boolean)
+    .map(t => t.slice(name.length + 1))
     .filter(v => parseVer(v))
     .sort(cmpVerDesc);
-  return tags.length ? tagFor(name, tags[0]) : null;
+  return tags.length ? `${name}@${tags[0]}` : null;
 }
 
 function commitsTouching(dir, sinceTag) {
@@ -280,7 +261,6 @@ function cmdRelease(args) {
     if (!ch.baseline) {
       ch.p.manifest.version = ch.to;
       writeJSON(ch.p.manifestPath, ch.p.manifest);
-      for (const py of pyprojectsIn(ch.p.dir)) setPyprojectVersion(py, ch.to);
       prependChangelog(join(ch.p.dir, "CHANGELOG.md"), ch.to, ch.lines, "Release.");
     }
   }
@@ -301,9 +281,9 @@ function cmdRelease(args) {
     const summary = bumped.map(c => `${c.p.name}@${c.to}`).join(", ");
     git(["commit", "-q", "-m", `chore(release): ${summary || "marketplace"}${marketLevel ? `; marketplace@${marketTo}` : ""}`]);
   }
-  for (const ch of changes) git(["tag", tagFor(ch.p.name, ch.to)]);
+  for (const ch of changes) git(["tag", `${ch.p.name}@${ch.to}`]);
   if (marketLevel) git(["tag", `marketplace-v${marketTo}`]);
-  console.log(c.grn("released ") + `tagged: ${changes.map(c => tagFor(c.p.name, c.to)).join(", ")}${marketLevel ? `, marketplace-v${marketTo}` : ""}`);
+  console.log(c.grn("released ") + `tagged: ${changes.map(c => `${c.p.name}@${c.to}`).join(", ")}${marketLevel ? `, marketplace-v${marketTo}` : ""}`);
   console.log(c.dim("  push with: git push && git push --tags"));
 }
 
@@ -317,10 +297,6 @@ function cmdValidate() {
     if (!p.manifest.name) { console.error(c.red(`✗ ${p.name}: plugin.json missing name`)); ok = false; }
     if (p.manifest.name !== p.name) { console.error(c.red(`✗ ${p.name}: plugin.json name "${p.manifest.name}" != directory`)); ok = false; }
     if (p.manifest.version && !parseVer(p.manifest.version)) { console.error(c.red(`✗ ${p.name}: invalid version "${p.manifest.version}"`)); ok = false; }
-    for (const py of pyprojectsIn(p.dir)) {
-      const v = (readFileSync(py, "utf8").match(PY_VERSION) || [])[1];
-      if (v !== p.manifest.version) { console.error(c.red(`✗ ${p.name}: ${relative(ROOT, py)} version "${v}" != plugin.json "${p.manifest.version}"`)); ok = false; }
-    }
     if (!listed.has(p.name)) { console.error(c.yel(`! ${p.name}: not in marketplace.json (run: mkt sync)`)); }
   }
   // delegate deep validation to claude CLI if present
@@ -365,24 +341,10 @@ function headerOf(text) {
   return out;
 }
 
-// unified diff of upstream (pinned) vs our copy, via git (no index needed)
-function printDiff(upstream, ours, aLabel, bLabel) {
-  const dir = join(ROOT, "node_modules", ".mkt-vendor-diff");
-  mkdirSync(dir, { recursive: true });
-  const a = "__upstream__", b = "__ours__";
-  writeFileSync(join(dir, a), upstream); writeFileSync(join(dir, b), ours);
-  try {
-    execFileSync("git", ["diff", "--no-index", "--no-color", "--src-prefix=", "--dst-prefix=", a, b], { cwd: dir, encoding: "utf8" });
-  } catch (e) {
-    console.log((e.stdout || "").split(a).join(aLabel).split(b).join(bLabel).replace(/^index .*\n/m, "").replace(/^/gm, "    "));
-  } finally { rmSync(dir, { recursive: true, force: true }); }
-}
-
 async function cmdVendor(args) {
   const flags = parseFlags(args);
   const update = flags._[0] === "update";
-  const showDiff = !!flags.diff;
-  if (flags._[0] && !update) die("usage: mkt vendor [--diff] | mkt vendor update [--to <sha>]");
+  if (flags._[0] && !update) die("usage: mkt vendor [update [--to <sha>]]");
   const manifest = readJSON(VENDOR_PATH);
   let problems = 0;
   for (const src of manifest.sources) {
@@ -405,7 +367,6 @@ async function cmdVendor(args) {
           state = c.grn(`updated to ${target.slice(0, 7)}`);
         }
         console.log(`  ${f.path} -> ${copy}  ${state}`);
-        if (showDiff && !same) printDiff(pinned, ours, `${src.repo}@${src.commit.slice(0, 7)}:${f.path}`, copy);
       }
       if (f.fork && moved) console.log(c.dim(`    fork: ${f.fork}; review upstream changes by hand`));
     }
@@ -460,7 +421,7 @@ const HELP = `mkt — dorbar-skills marketplace toolkit
   mkt bump <plugin> <patch|minor|major>                        manual single-plugin bump
   mkt validate                                                 validate manifests + claude plugin validate
   mkt install-hooks                                            install commit-msg conventional-commit lint
-  mkt vendor [--diff] | vendor update [--to <sha>]             check vendored files against upstream (vendor.json); --diff shows each fork
+  mkt vendor [update [--to <sha>]]                             check vendored files against upstream (vendor.json)
 `;
 
 const [cmd, ...rest] = process.argv.slice(2);
