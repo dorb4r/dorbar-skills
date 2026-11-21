@@ -33,8 +33,11 @@ catalogs **plugins**, and versioning is per-plugin. Follow this exact workflow �
 5. **Sync + validate:** `./bin/mkt sync && ./bin/mkt validate` — must pass `claude plugin validate`.
 6. **Commit + push:**
    `git add -A && git commit -m "feat(<name>): add <skill>" && git push`
-7. **Version (optional now, required for clean updates):** `./bin/mkt release` bumps versions from
-   commit history, updates CHANGELOGs, and tags. First release per plugin just sets the baseline tag.
+7. **Version (required whenever an existing plugin's files change):** in the same PR, run
+   `./bin/mkt bump <plugin> <patch|minor|major>` (fix = patch, feat = minor, breaking = major); it
+   updates plugin.json, pyproject, CHANGELOG and marketplace.json. `./bin/mkt check-bump` (and the
+   `plugin versions` CI job) fails without it, because `claude plugin update` only sees new versions.
+   After merge, tag the merge commit `<plugin>-v<version>` (or `./bin/mkt release`).
 
 ## Don't
 - Don't put `skills/`, `agents/`, or `hooks/` inside `.claude-plugin/` — only `plugin.json` goes there.

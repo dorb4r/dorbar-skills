@@ -42,6 +42,7 @@ the plugin manifests — never edit it by hand; run `mkt sync` (or any command t
 ./bin/mkt release [--dry-run] [--plugin <name>] [--no-git]         # auto-bump + tag
 ./bin/mkt bump <plugin> <patch|minor|major>                        # manual bump
 ./bin/mkt validate                                                 # check manifests + claude plugin validate
+./bin/mkt check-bump [--base <ref>]                                # fail if a plugin changed without a version bump
 ./bin/mkt install-hooks                                            # commit-msg conventional-commit lint
 ```
 
@@ -67,8 +68,16 @@ plugin's last release tag, scoped by which files the commit touched:
 | `docs:` `chore:` `style:` `test:` `ci:` `build:` | none |
 
 `mkt release` applies the bumps, prepends each plugin's `CHANGELOG.md`, syncs `marketplace.json`,
-bumps the marketplace version, commits, and tags (`<plugin>@<version>`, `marketplace-v<version>`).
-The GitHub Actions workflow runs this automatically on every push to `main`.
+bumps the marketplace version, commits, and tags (`<plugin>-v<version>`, `marketplace-v<version>`).
+The GitHub Actions workflow runs this automatically on every push to `main` once a `RELEASE_TOKEN`
+secret exists (see `release.yml`); until then, tag by hand after merging.
+
+**Every PR that changes a plugin's files bumps that plugin's version** (`./bin/mkt bump <plugin>
+<level>`, which also updates its CHANGELOG, pyproject and `marketplace.json`). `claude plugin update`
+compares versions only, so an unbumped change never reaches installed copies. The `plugin versions`
+workflow runs `mkt check-bump` on every PR and fails when a changed plugin (CHANGELOG.md aside) kept
+its base version or reuses a tagged one. `mkt release` tags a version bumped this way as is, without
+bumping it again.
 
 > First `mkt release` establishes baseline tags at the current versions without bumping. After that,
 > commits drive the bumps. Run `mkt install-hooks` once to enforce the commit format locally.
