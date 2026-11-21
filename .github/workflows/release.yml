@@ -1,11 +1,6 @@
-# Auto-release on push to main: derives per-plugin semver bumps from Conventional
-# Commits, updates manifests + CHANGELOGs, syncs marketplace.json, and tags.
-#
-# `main` is protected (PR + 1 approval). The default GITHUB_TOKEN is NOT a repo
-# admin, so it cannot bypass the rule to push release commits/tags. To enable
-# auto-release, add a repository secret RELEASE_TOKEN = a fine-grained PAT with
-# Contents: read & write on this repo, owned by a repo admin (so it matches the
-# admin bypass actor in the ruleset). Until that secret exists, this job no-ops.
+# After a merge to main, tag every version that has no tag yet: <plugin>-v<version> and
+# marketplace-v<version>. The PR already set the versions (mkt version, checked by plugin-versions),
+# so nothing is committed here and the default token is enough: tags are not branch-protected.
 name: release
 
 on:
@@ -20,31 +15,15 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  release:
+  tag:
     runs-on: ubuntu-latest
-    env:
-      RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+    timeout-minutes: 5
     steps:
-      - name: Skip if no release token
-        if: env.RELEASE_TOKEN == ''
-        run: echo "::notice::RELEASE_TOKEN not set — skipping auto-release. Add the PAT secret to enable. Releases can still be run locally with ./bin/mkt release."
       - uses: actions/checkout@v4
-        if: env.RELEASE_TOKEN != ''
         with:
-          fetch-depth: 0          # full history + tags needed for version detection
-          token: ${{ env.RELEASE_TOKEN }}
+          fetch-depth: 0          # existing tags
       - uses: actions/setup-node@v4
-        if: env.RELEASE_TOKEN != ''
         with:
           node-version: 20
-      - name: Configure git
-        if: env.RELEASE_TOKEN != ''
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-      - name: Release
-        if: env.RELEASE_TOKEN != ''
-        run: node tools/mkt.mjs release
-      - name: Push commits and tags
-        if: env.RELEASE_TOKEN != ''
-        run: git push --follow-tags
+      - name: tag new versions
+        run: node tools/mkt.mjs tag --push

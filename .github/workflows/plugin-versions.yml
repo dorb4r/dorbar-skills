@@ -1,18 +1,23 @@
-# A change to a plugin's files must ship with a version bump in the same PR: `claude plugin update`
-# compares versions only, so an unbumped change never reaches installed copies.
-# Fix a failure with: ./bin/mkt bump <plugin> <patch|minor|major>
+# Versions follow the PR title. Merges are squash-only with the PR title as the commit title, so the
+# title is the one commit main records: <type>(<plugin>)!: <summary>
+#   fix/perf/refactor/revert -> patch, feat -> minor, ! -> major; any other type -> patch for a
+#   plugin whose files changed (installed copies only update when the version moves).
+# Fix a failure with:  ./bin/mkt version --title "<the PR title>"  and commit the result.
 name: plugin versions
 
 on:
   pull_request:
+    types: [opened, edited, synchronize, reopened]
 
 permissions:
   contents: read
 
 jobs:
-  check-bump:
+  versions:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    env:
+      PR_TITLE: ${{ github.event.pull_request.title }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -20,7 +25,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: every changed plugin is bumped
-        run: node tools/mkt.mjs check-bump --base "origin/${{ github.base_ref }}"
+      - name: PR title is a semantic commit
+        run: node tools/mkt.mjs lint-title
+      - name: versions match the title and the changed plugins
+        run: node tools/mkt.mjs version --check --base "origin/${{ github.base_ref }}"
       - name: manifests agree (plugin.json, marketplace.json, pyproject)
         run: node tools/mkt.mjs validate

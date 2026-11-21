@@ -12,8 +12,9 @@ catalogs **plugins**, and versioning is per-plugin. Follow this exact workflow �
 - **`plugins/<name>/.claude-plugin/plugin.json` is the source of truth.** `marketplace.json`'s
   `plugins[]` is GENERATED — never hand-edit it. Run `./bin/mkt sync` to regenerate.
 - **Imported skills are copied verbatim.** Don't rewrite an exported `SKILL.md`; only its home changes.
-- **Commits must follow Conventional Commits** (a `commit-msg` hook enforces it) — that's what drives
-  auto-versioning. New skill = `feat(<plugin>): ...`; bug fix = `fix(<plugin>): ...`.
+- **The PR title sets the version.** Merges are squash-only with the PR title as the commit on
+  `main`, so the title is the semantic commit: see *PR title format* below. Commits inside the PR
+  also follow it (the `commit-msg` hook checks them), but only the title decides the bump.
 
 ## Decide the shape
 - **Standalone** (default): one skill = one plugin with its own version. `./bin/mkt new <name>`
@@ -31,13 +32,33 @@ catalogs **plugins**, and versioning is per-plugin. Follow this exact workflow �
    (trigger phrases). That text is how Claude decides to invoke the skill.
 4. **Metadata:** set `keywords` (and optionally `category`) in `plugin.json` for discovery.
 5. **Sync + validate:** `./bin/mkt sync && ./bin/mkt validate` — must pass `claude plugin validate`.
-6. **Commit + push:**
-   `git add -A && git commit -m "feat(<name>): add <skill>" && git push`
-7. **Version (required whenever an existing plugin's files change):** in the same PR, run
-   `./bin/mkt bump <plugin> <patch|minor|major>` (fix = patch, feat = minor, breaking = major); it
-   updates plugin.json, pyproject, CHANGELOG and marketplace.json. `./bin/mkt check-bump` (and the
-   `plugin versions` CI job) fails without it, because `claude plugin update` only sees new versions.
-   After merge, tag the merge commit `<plugin>-v<version>` (or `./bin/mkt release`).
+6. **Branch + commit:** `git switch -c feat/<name>`, then
+   `git add -A && git commit -m "feat(<name>): add <skill>"`.
+7. **Version from the PR title:** pick the title now, then run
+   `./bin/mkt version --title "<the PR title>"` and commit what it writes
+   (`chore(<name>): version`). It sets every changed plugin's version, its pyproject and CHANGELOG,
+   and the marketplace version; rerun it whenever the title or the changed plugins change (it is
+   idempotent and drops sections it wrote for a superseded version).
+8. **Push + PR:** `git push -u origin HEAD && gh pr create --title "<the same title>"`. The
+   `plugin versions` check runs `mkt lint-title` and `mkt version --check`; if you edit the title on
+   GitHub, rerun step 7 with the new title and push.
+9. **After merge** the `release` workflow tags each new version `<plugin>-v<version>` (and
+   `marketplace-v<version>`). Nothing to do by hand; `./bin/mkt status` shows any untagged version.
+
+## PR title format
+`<type>(<scope>)!: <summary>`: lowercase type, scope = the plugin name (comma-separate several, or
+omit it for repo-only changes), `!` only for a breaking change, summary in the imperative.
+
+| Title | Bump for each plugin the PR changes |
+| ----- | ----------------------------------- |
+| `feat(<plugin>)!: ...` | major |
+| `feat(<plugin>): ...` | minor |
+| `fix:` `perf:` `refactor:` `revert:` | patch |
+| `docs:` `style:` `test:` `build:` `ci:` `chore:` | patch if a plugin's files changed, else none |
+
+Every plugin whose files the PR changes (CHANGELOG.md aside) moves one level from its version on
+`main`; the marketplace version moves by the same level when any plugin does. A version bump is what
+makes `claude plugin update` see a change, so no plugin change ships without one.
 
 ## Don't
 - Don't put `skills/`, `agents/`, or `hooks/` inside `.claude-plugin/` — only `plugin.json` goes there.

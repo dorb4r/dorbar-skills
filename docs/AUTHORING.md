@@ -9,7 +9,7 @@
 git add -A && git commit -m "feat(pdf-tools): add pdf-tools skill"
 ```
 
-The `feat:` commit means the first `mkt release` (after baseline) will treat it as a minor bump.
+Open the PR with a semantic title (`feat(pdf-tools): add pdf-tools skill`); the title sets the bump.
 
 ## Add a bundle (several related skills in one versioned plugin)
 
@@ -63,8 +63,7 @@ description: >-                  # REQUIRED — include "Use when …" trigger t
 ## Release workflow
 
 ```sh
-./bin/mkt status            # preview pending bumps
-./bin/mkt release --dry-run # see what would change
-./bin/mkt release           # apply, commit, tag
-git push --follow-tags      # (or let the GitHub Action do it on push to main)
+./bin/mkt version --title "fix(pdf-tools): handle empty pages"   # versions from the PR title
+git commit -am "chore(pdf-tools): version" && git push           # CI runs mkt version --check
+# after merge, the release workflow tags <plugin>-v<version>; ./bin/mkt status shows any untagged
 ```

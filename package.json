@@ -12,7 +12,8 @@
     "new": "node tools/mkt.mjs new",
     "sync": "node tools/mkt.mjs sync",
     "status": "node tools/mkt.mjs status",
-    "release": "node tools/mkt.mjs release",
+    "version": "node tools/mkt.mjs version",
+    "tag": "node tools/mkt.mjs tag",
     "validate": "node tools/mkt.mjs validate"
   },
   "engines": {

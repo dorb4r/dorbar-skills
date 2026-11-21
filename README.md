@@ -21,7 +21,7 @@ dorbar-skills/
 ├── templates/               # scaffolding templates (skill-plugin, bundle-plugin)
 ├── tools/mkt.mjs            # the marketplace toolkit (zero-dependency Node)
 ├── bin/mkt                  # `./bin/mkt …` convenience shim
-└── .github/workflows/release.yml   # auto-release on push to main
+└── .github/workflows/            # plugin-versions (PR check), release (tags on main)
 ```
 
 A **plugin** is the unit Claude Code installs and versions. A plugin can be:
@@ -37,16 +37,16 @@ the plugin manifests — never edit it by hand; run `mkt sync` (or any command t
 
 ```sh
 ./bin/mkt new <name> [--bundle] [--skill <skill>] [--desc "..."]   # scaffold a plugin
-./bin/mkt status                                                   # versions + pending bumps
+./bin/mkt status                                                   # versions + whether each is tagged
 ./bin/mkt sync                                                      # rebuild marketplace.json
-./bin/mkt release [--dry-run] [--plugin <name>] [--no-git]         # auto-bump + tag
-./bin/mkt bump <plugin> <patch|minor|major>                        # manual bump
+./bin/mkt lint-title ["<title>"]                                    # check a PR title is a semantic commit
+./bin/mkt version --title "<PR title>" [--base <ref>] [--check]     # set versions from the PR title
+./bin/mkt tag [--push]                                             # tag untagged versions (CI does it on main)
 ./bin/mkt validate                                                 # check manifests + claude plugin validate
-./bin/mkt check-bump [--base <ref>]                                # fail if a plugin changed without a version bump
 ./bin/mkt install-hooks                                            # commit-msg conventional-commit lint
 ```
 
-(Or via npm: `npm run new -- <name>`, `npm run release`, etc.)
+(Or via npm: `npm run new -- <name>`, `npm run version -- --title "..."`, etc.)
 
 ## Versioning
 
@@ -57,30 +57,26 @@ Two independent version axes, both SemVer:
 - **Marketplace** — top-level `version` in `marketplace.json`. Bumped automatically to the highest
   level of any plugin changed in a release.
 
-Bumps are derived from **[Conventional Commits](https://www.conventionalcommits.org/)** since each
-plugin's last release tag, scoped by which files the commit touched:
+**The PR title sets the bump.** Merges are squash-only and the PR title becomes the commit on `main`,
+so the title must be a [Conventional Commit](https://www.conventionalcommits.org/):
+`<type>(<plugin>)!: <summary>`.
 
-| Commit type             | Bump  |
+| PR title type           | Bump for each plugin the PR changes |
 | ----------------------- | ----- |
 | `fix:` `perf:` `refactor:` `revert:` | patch |
 | `feat:`                 | minor |
-| `feat!:` / `BREAKING CHANGE` | major |
-| `docs:` `chore:` `style:` `test:` `ci:` `build:` | none |
+| `<type>!:` (breaking)   | major |
+| `docs:` `chore:` `style:` `test:` `ci:` `build:` | patch if a plugin's files changed, else none |
 
-`mkt release` applies the bumps, prepends each plugin's `CHANGELOG.md`, syncs `marketplace.json`,
-bumps the marketplace version, commits, and tags (`<plugin>-v<version>`, `marketplace-v<version>`).
-The GitHub Actions workflow runs this automatically on every push to `main` once a `RELEASE_TOKEN`
-secret exists (see `release.yml`); until then, tag by hand after merging.
+`./bin/mkt version --title "<PR title>"` writes the bumps into the PR: each changed plugin's
+`plugin.json`, pyproject and `CHANGELOG.md`, and the marketplace version and root `CHANGELOG.md`
+(the highest level, applied once). It computes from the versions on `main`, so rerunning it is safe.
+`claude plugin update` compares versions only, so no plugin change ships without a bump.
 
-**Every PR that changes a plugin's files bumps that plugin's version** (`./bin/mkt bump <plugin>
-<level>`, which also updates its CHANGELOG, pyproject and `marketplace.json`). `claude plugin update`
-compares versions only, so an unbumped change never reaches installed copies. The `plugin versions`
-workflow runs `mkt check-bump` on every PR and fails when a changed plugin (CHANGELOG.md aside) kept
-its base version or reuses a tagged one. `mkt release` tags a version bumped this way as is, without
-bumping it again.
-
-> First `mkt release` establishes baseline tags at the current versions without bumping. After that,
-> commits drive the bumps. Run `mkt install-hooks` once to enforce the commit format locally.
+The `plugin versions` workflow runs on every PR (and on title edits): `mkt lint-title`, then
+`mkt version --check`, which fails with the exact command to run when the versions don't match the
+title and the changed files. After merge, the `release` workflow runs `mkt tag --push`, tagging each
+new version `<plugin>-v<version>` and `marketplace-v<version>`.
 
 ## Using this marketplace from another project
 
