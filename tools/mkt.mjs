@@ -4,9 +4,10 @@
 // Subcommands:
 //   mkt new <name> [--bundle] [--skill <skill>] [--desc "..."]   scaffold a plugin
 //   mkt sync                                                     regenerate marketplace.json from plugin manifests
-//   mkt status                                                   show versions + pending conventional-commit bumps
-//   mkt release [--dry-run] [--plugin <name>] [--no-git]         auto-bump from Conventional Commits, sync, tag
-//   mkt bump <plugin> <patch|minor|major>                       manual single-plugin bump
+//   mkt status                                                   show versions and whether each is tagged
+//   mkt lint-title [<title>]                                     check a PR title is <type>(<scope>)!: <summary>
+//   mkt version [--title "..."] [--base <ref>] [--check]         set plugin + marketplace versions from the PR title and changed files
+//   mkt tag [--push]                                             tag every untagged current version (CI runs it on main)
 //   mkt validate                                                 validate manifests + run `claude plugin validate`
 //   mkt install-hooks                                            install the commit-msg hook (conventional-commit lint)
 //   mkt vendor [--diff] | vendor update [--to <sha>]             check/update vendored files (vendor.json); --diff prints forks vs upstream
@@ -57,25 +58,6 @@ function cmpVerDesc(a, b) {
   return (pb.major - pa.major) || (pb.minor - pa.minor) || (pb.patch - pa.patch);
 }
 
-// ---------- conventional commits ----------
-// Returns { level, lines } where level is patch|minor|major|null and lines are changelog bullets.
-function classifyCommits(commits) {
-  let level = null;
-  const lines = [];
-  for (const { subject, body } of commits) {
-    const m = /^(\w+)(\([^)]*\))?(!)?:\s*(.+)$/.exec(subject);
-    const breaking = (m && m[3] === "!") || /BREAKING[ -]CHANGE/.test(body);
-    let l = null, type = m ? m[1].toLowerCase() : null;
-    if (breaking) l = "major";
-    else if (type === "feat") l = "minor";
-    else if (type === "fix" || type === "perf" || type === "refactor" || type === "revert") l = "patch";
-    // docs/chore/style/test/ci/build => no release contribution
-    level = maxLevel(level, l);
-    if (l || breaking) lines.push(`- ${subject}`);
-  }
-  return { level, lines };
-}
-
 // ---------- plugins ----------
 function listPlugins() {
   if (!existsSync(PLUGINS_DIR)) return [];
@@ -109,26 +91,6 @@ function pyprojectsIn(dir) {
 const PY_VERSION = /^version\s*=\s*"([^"]*)"/m;
 function setPyprojectVersion(file, version) {
   writeFileSync(file, readFileSync(file, "utf8").replace(PY_VERSION, `version = "${version}"`));
-}
-
-function lastTagFor(name) {
-  if (!hasGit()) return null;
-  const tags = git(["tag", "--list", `${name}-v*`], { allowFail: true }).split("\n").filter(Boolean)
-    .map(t => t.slice(name.length + 2))
-    .filter(v => parseVer(v))
-    .sort(cmpVerDesc);
-  return tags.length ? tagFor(name, tags[0]) : null;
-}
-
-function commitsTouching(dir, sinceTag) {
-  if (!hasGit()) return [];
-  const range = sinceTag ? `${sinceTag}..HEAD` : "HEAD";
-  const SEP = "\x1e", FLD = "\x1f";
-  const out = git(["log", `--format=%s${FLD}%b${SEP}`, range, "--", relative(ROOT, dir)], { allowFail: true });
-  return out.split(SEP).map(s => s.trim()).filter(Boolean).map(rec => {
-    const [subject, body = ""] = rec.split(FLD);
-    return { subject: subject.trim(), body: body.trim() };
-  });
 }
 
 // ---------- marketplace sync ----------
@@ -207,104 +169,171 @@ function replaceInFile(file, map) {
   writeFileSync(file, s);
 }
 
-function cmdStatus() {
-  const plugins = listPlugins();
-  if (!plugins.length) { console.log(c.dim("no plugins yet — scaffold one with: mkt new <name>")); return; }
-  console.log(c.bold("plugin".padEnd(28)) + c.bold("version".padEnd(12)) + c.bold("pending bump"));
-  for (const p of plugins) {
-    const tag = lastTagFor(p.name);
-    const commits = commitsTouching(p.dir, tag);
-    const { level } = classifyCommits(commits);
-    const note = !hasGit() ? c.dim("(no git)")
-      : !tag ? c.yel("unreleased") + c.dim(` (${commits.length} commit(s))`)
-      : level ? c.yel(level) + c.dim(` → ${bumpVer(p.manifest.version, level)}`) + c.dim(` (${commits.length} commit(s))`)
-      : c.dim("none");
-    console.log((p.name).padEnd(28) + String(p.manifest.version || "—").padEnd(12) + note);
-  }
+// ---------- semantic PR titles ----------
+// Merges are squash-only with the PR title as the commit title, so the PR title alone decides the
+// bump: <type>(<scope>)!: <summary>. The scope is the plugin name (comma-separate several, or omit it).
+const TITLE = /^(feat|fix|perf|refactor|revert|docs|style|test|build|ci|chore)(\(([a-z0-9-]+(?:,[a-z0-9-]+)*)\))?(!)?: \S.*$/;
+const TYPE_LEVEL = { feat: "minor", fix: "patch", perf: "patch", refactor: "patch", revert: "patch" };
+const TITLE_HELP = `PR title must be <type>(<scope>)!: <summary>, e.g.
+    fix(layered-context): skip non-path Inputs tokens      -> patch
+    feat(agent-workflows): add a bounded-loop skill        -> minor
+    feat(layered-context)!: rename the Inputs heading      -> major (! = breaking)
+  types: feat fix perf refactor revert docs style test build ci chore; scope = plugin name(s), optional`;
+
+function parseTitle(title) {
+  const m = TITLE.exec(String(title || "").trim());
+  if (!m) return null;
+  return { type: m[1], scopes: m[3] ? m[3].split(",") : [], breaking: !!m[4], level: m[4] ? "major" : TYPE_LEVEL[m[1]] || null };
 }
 
-function cmdBump(args) {
-  const [name, level] = args;
-  if (!name || !["patch", "minor", "major"].includes(level)) die("usage: mkt bump <plugin> <patch|minor|major>");
-  const p = listPlugins().find(x => x.name === name);
-  if (!p) die(`no such plugin: ${name}`);
-  const from = p.manifest.version || "0.0.0";
-  const to = bumpVer(from, level);
-  p.manifest.version = to;
-  writeJSON(p.manifestPath, p.manifest);
-  prependChangelog(join(p.dir, "CHANGELOG.md"), to, [], `Manual ${level} bump.`);
-  syncMarketplace();
-  console.log(c.grn("bumped ") + `${name} ${from} → ${to}`);
+function prTitle(flags) {
+  if (typeof flags.title === "string") return flags.title;
+  if (process.env.PR_TITLE) return process.env.PR_TITLE;
+  try {
+    return execFileSync("gh", ["pr", "view", "--json", "title", "-q", ".title"], { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+  } catch { die('no PR for this branch yet - pass the title you will use: --title "fix(<plugin>): ..."'); }
 }
 
-function cmdRelease(args) {
+function cmdLintTitle(args) {
   const flags = parseFlags(args);
-  if (!hasGit()) die("release needs a git repository (run `git init` and commit first)");
-  const only = flags.plugin;
-  const plugins = listPlugins().filter(p => !only || p.name === only);
-  if (!plugins.length) die(only ? `no such plugin: ${only}` : "no plugins to release");
+  const title = flags._.length ? flags._.join(" ") : prTitle(flags);
+  const t = parseTitle(title);
+  if (!t) { console.error(c.red(`✗ "${title}"\n`) + TITLE_HELP); process.exit(1); }
+  console.log(c.grn(`✓ ${title}`) + c.dim(` (${t.level || "no release level; plugin changes still ship as patch"})`));
+}
 
-  const changes = [];
-  for (const p of plugins) {
-    const tag = lastTagFor(p.name);
-    const commits = commitsTouching(p.dir, tag);
-    const { level, lines } = classifyCommits(commits);
-    if (!tag) {
-      // first release: establish baseline at the manifest's current version, no bump.
-      changes.push({ p, from: p.manifest.version, to: p.manifest.version, level: "baseline", lines, baseline: true });
-      continue;
-    }
-    if (!level) continue; // nothing release-worthy
-    const to = bumpVer(p.manifest.version, level);
-    changes.push({ p, from: p.manifest.version, to, level, lines });
+// ---------- versions from the PR (mkt version) ----------
+function showAt(ref, rel) { return git(["show", `${ref}:${rel}`], { allowFail: true }); }
+function jsonAt(ref, rel) { try { return JSON.parse(showAt(ref, rel) || "null"); } catch { return null; } }
+
+// A file the version step itself writes counts as changed only when more than its version moved.
+function realChange(rel, mb) {
+  if (rel.endsWith("/CHANGELOG.md")) return false;
+  const before = showAt(mb, rel);
+  if (!before || !existsSync(join(ROOT, rel))) return true;
+  const now = readFileSync(join(ROOT, rel), "utf8");
+  if (rel.endsWith(".claude-plugin/plugin.json")) {
+    const strip = s => { try { const o = JSON.parse(s); delete o.version; return JSON.stringify(o); } catch { return s; } };
+    return strip(before) !== strip(now);
   }
+  if (rel.endsWith("pyproject.toml")) return before.replace(PY_VERSION, "") !== now.replace(PY_VERSION, "");
+  return true;
+}
 
-  if (!changes.length) { console.log(c.dim("nothing to release.")); return; }
+function versionPlan(flags) {
+  if (!hasGit()) die("version needs a git repository");
+  const title = prTitle(flags);
+  const t = parseTitle(title);
+  if (!t) die(`"${title}"\n${TITLE_HELP}`);
+  const base = typeof flags.base === "string" ? flags.base : "origin/main";
+  const mb = git(["merge-base", base, "HEAD"], { allowFail: true });
+  if (!mb) die(`no merge base with ${base} (fetch it first: git fetch origin main)`);
+  // committed + uncommitted + untracked changes since the merge base
+  const changed = [...new Set([
+    ...git(["diff", "--name-only", mb]).split("\n"),
+    ...git(["ls-files", "--others", "--exclude-standard"]).split("\n"),
+  ].filter(Boolean))];
+  const level = maxLevel(t.level, "patch"); // a plugin's files are what users install: any change ships
+  const plugins = listPlugins().map(p => {
+    const rel = relative(ROOT, p.dir) + "/";
+    const files = changed.filter(f => f.startsWith(rel) && realChange(f, mb));
+    const before = jsonAt(mb, relative(ROOT, p.manifestPath))?.version ?? null;
+    if (before === null) return { p, before, expected: p.manifest.version, files, isNew: true, level: null };
+    return { p, before, files, expected: files.length ? bumpVer(before, level) : before, level: files.length ? level : null };
+  });
+  const touched = plugins.filter(x => x.files.length || x.isNew);
+  const mktBefore = jsonAt(mb, relative(ROOT, MARKETPLACE_PATH))?.version ?? readJSON(MARKETPLACE_PATH).version;
+  const market = { before: mktBefore, expected: touched.length ? bumpVer(mktBefore, level) : mktBefore };
+  for (const s of t.scopes) if (listPlugins().some(p => p.name === s) && !touched.some(x => x.p.name === s))
+    console.log(c.yel(`! scope "${s}" names a plugin this PR does not change`));
+  return { title, t, level, plugins, touched, market };
+}
 
-  let marketLevel = null;
-  for (const ch of changes) if (!ch.baseline) marketLevel = maxLevel(marketLevel, ch.level);
+// Drop sections this PR wrote for other versions (above the base); keep an existing section for
+// `version` (it may carry hand-written notes) unless `replace`; otherwise write it.
+function writeChangelog(file, before, version, lines, { replace = false } = {}) {
+  let exists = false;
+  if (existsSync(file)) {
+    const parts = readFileSync(file, "utf8").split(/(?=^## \[)/m);
+    const keep = parts.filter(s => {
+      const m = /^## \[([^\]]+)\]/.exec(s);
+      if (!m || !parseVer(m[1]) || !before || cmpVerDesc(before, m[1]) <= 0) return true;
+      if (m[1] === version && !replace) { exists = true; return true; }
+      return false;
+    });
+    writeFileSync(file, keep.join(""));
+  }
+  if (!exists && version !== before) prependChangelog(file, version, lines, "Release.");
+}
 
+function cmdVersion(args) {
+  const flags = parseFlags(args);
+  const plan = versionPlan(flags);
+  const rows = plan.plugins.filter(x => x.files.length || x.isNew || x.p.manifest.version !== x.before);
+  if (flags.check) {
+    let ok = true;
+    const bad = (msg) => { console.error(c.red("✗ " + msg)); ok = false; };
+    for (const x of plan.plugins) {
+      if (x.p.manifest.version !== x.expected)
+        bad(`${x.p.name}: version ${x.p.manifest.version}, expected ${x.expected}` + (x.files.length ? ` (${x.files.length} file(s) changed, ${x.level})` : " (unchanged in this PR)"));
+      for (const py of pyprojectsIn(x.p.dir)) {
+        const v = (readFileSync(py, "utf8").match(PY_VERSION) || [])[1];
+        if (v !== x.expected) bad(`${relative(ROOT, py)}: version ${v}, expected ${x.expected}`);
+      }
+      if (x.files.length && !x.isNew && !readFileSync(join(x.p.dir, "CHANGELOG.md"), "utf8").includes(`## [${x.expected}]`))
+        bad(`${x.p.name}: CHANGELOG.md has no [${x.expected}] section`);
+    }
+    const mkt = readJSON(MARKETPLACE_PATH);
+    if (mkt.version !== plan.market.expected) bad(`marketplace.json: version ${mkt.version}, expected ${plan.market.expected}`);
+    for (const x of plan.plugins) {
+      const e = (mkt.plugins || []).find(e => e.name === x.p.name);
+      if (!e || e.version !== x.p.manifest.version) bad(`marketplace.json entry for ${x.p.name} is out of sync with plugin.json`);
+    }
+    if (!ok) { console.error(`  fix: ./bin/mkt version --title "${plan.title}" && commit the result`); process.exit(1); }
+    console.log(c.grn(`✓ versions match "${plan.title}"`) + c.dim(` (${plan.touched.length} plugin(s) changed)`));
+    return;
+  }
+  for (const x of plan.plugins) {
+    if (x.isNew || x.p.manifest.version === x.expected && !x.files.length) continue;
+    x.p.manifest.version = x.expected;
+    writeJSON(x.p.manifestPath, x.p.manifest);
+    for (const py of pyprojectsIn(x.p.dir)) setPyprojectVersion(py, x.expected);
+    const log = join(x.p.dir, "CHANGELOG.md");
+    if (x.files.length) writeChangelog(log, x.before, x.expected, [`- ${plan.title}`]);
+    else writeChangelog(log, x.before, x.before, []); // reverted: drop this PR's section only
+  }
   const mkt = readJSON(MARKETPLACE_PATH);
-  const marketTo = marketLevel ? bumpVer(mkt.version, marketLevel) : mkt.version;
-
-  console.log(c.bold(flags["dry-run"] ? "DRY RUN — planned release:" : "Releasing:"));
-  for (const ch of changes) {
-    console.log(`  ${ch.p.name.padEnd(26)} ${ch.from} → ${c.grn(ch.to)} ${ch.baseline ? c.dim("(baseline tag)") : c.dim(`(${ch.level})`)}`);
-  }
-  if (marketLevel) console.log(`  ${"marketplace".padEnd(26)} ${mkt.version} → ${c.grn(marketTo)} ${c.dim(`(${marketLevel})`)}`);
-
-  if (flags["dry-run"]) return;
-
-  // apply
-  for (const ch of changes) {
-    if (!ch.baseline) {
-      ch.p.manifest.version = ch.to;
-      writeJSON(ch.p.manifestPath, ch.p.manifest);
-      for (const py of pyprojectsIn(ch.p.dir)) setPyprojectVersion(py, ch.to);
-      prependChangelog(join(ch.p.dir, "CHANGELOG.md"), ch.to, ch.lines, "Release.");
-    }
-  }
-  mkt.version = marketTo;
+  mkt.version = plan.market.expected;
   writeJSON(MARKETPLACE_PATH, mkt);
   syncMarketplace({ quiet: true });
-  if (marketLevel) {
-    const rootLines = changes.filter(c => !c.baseline).map(ch => `- **${ch.p.name}** ${ch.to} (${ch.level})`);
-    prependChangelog(ROOT_CHANGELOG, marketTo, rootLines, "Release.");
-  }
+  if (plan.touched.length)
+    writeChangelog(ROOT_CHANGELOG, plan.market.before, plan.market.expected,
+      plan.touched.map(x => `- **${x.p.name}** ${x.expected}${x.isNew ? " (new)" : ` (${x.level})`}`), { replace: true });
+  for (const x of rows) console.log(`  ${x.p.name.padEnd(26)} ${x.before ?? "new"} → ${c.grn(x.expected)}`);
+  console.log(`  ${"marketplace".padEnd(26)} ${plan.market.before} → ${c.grn(plan.market.expected)}`);
+  console.log(c.dim("  commit these files with the PR; CI runs mkt version --check"));
+}
 
-  if (flags["no-git"]) { console.log(c.grn("done") + c.dim(" (files written; skipped git commit/tag)")); return; }
+// ---------- tags (after merge, on main) ----------
+function cmdTag(args) {
+  const flags = parseFlags(args);
+  if (!hasGit()) die("tag needs a git repository");
+  const want = [...listPlugins().map(p => tagFor(p.name, p.manifest.version)), `marketplace-v${readJSON(MARKETPLACE_PATH).version}`];
+  const have = new Set(git(["tag", "--list"]).split("\n"));
+  const made = want.filter(t => !have.has(t));
+  if (!made.length) { console.log(c.dim("every current version is already tagged")); return; }
+  for (const t of made) git(["tag", t]);
+  if (flags.push) git(["push", "origin", ...made.map(t => `refs/tags/${t}`)]);
+  console.log(c.grn("tagged ") + made.join(", ") + (flags.push ? "" : c.dim("  (push with: git push origin --tags)")));
+}
 
-  const bumped = changes.filter(c => !c.baseline);
-  if (bumped.length || marketLevel) {
-    // a baseline-only release writes no files, so there is nothing to commit — just tag.
-    git(["add", "-A"]);
-    const summary = bumped.map(c => `${c.p.name}@${c.to}`).join(", ");
-    git(["commit", "-q", "-m", `chore(release): ${summary || "marketplace"}${marketLevel ? `; marketplace@${marketTo}` : ""}`]);
+function cmdStatus() {
+  const have = new Set(hasGit() ? git(["tag", "--list"]).split("\n") : []);
+  console.log(c.bold("plugin".padEnd(28)) + c.bold("version".padEnd(12)) + c.bold("tag"));
+  for (const p of listPlugins()) {
+    const t = tagFor(p.name, p.manifest.version);
+    console.log(p.name.padEnd(28) + String(p.manifest.version || "—").padEnd(12) + (have.has(t) ? c.dim(t) : c.yel("untagged")));
   }
-  for (const ch of changes) git(["tag", tagFor(ch.p.name, ch.to)]);
-  if (marketLevel) git(["tag", `marketplace-v${marketTo}`]);
-  console.log(c.grn("released ") + `tagged: ${changes.map(c => tagFor(c.p.name, c.to)).join(", ")}${marketLevel ? `, marketplace-v${marketTo}` : ""}`);
-  console.log(c.dim("  push with: git push && git push --tags"));
 }
 
 function cmdValidate() {
@@ -322,6 +351,8 @@ function cmdValidate() {
       if (v !== p.manifest.version) { console.error(c.red(`✗ ${p.name}: ${relative(ROOT, py)} version "${v}" != plugin.json "${p.manifest.version}"`)); ok = false; }
     }
     if (!listed.has(p.name)) { console.error(c.yel(`! ${p.name}: not in marketplace.json (run: mkt sync)`)); }
+    const entry = (mkt.plugins || []).find(e => e.name === p.name);
+    if (entry && entry.version !== p.manifest.version) { console.error(c.red(`✗ ${p.name}: marketplace.json version "${entry.version}" != plugin.json "${p.manifest.version}" (run: mkt sync)`)); ok = false; }
   }
   // delegate deep validation to claude CLI if present
   try {
@@ -427,7 +458,7 @@ msg=$(head -1 "$1")
 case "$msg" in
   "Merge "*|"Revert "*|fixup!*|squash!*) exit 0 ;;
 esac
-echo "$msg" | grep -Eq '^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\\([a-z0-9-]+\\))?!?: .+' && exit 0
+echo "$msg" | grep -Eq '^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\\([a-z0-9-]+(,[a-z0-9-]+)*\\))?!?: .+' && exit 0
 echo "✗ commit message must follow Conventional Commits, e.g.:" >&2
 echo "    feat(my-skill): add OCR support" >&2
 echo "    fix(my-skill): handle empty input" >&2
@@ -455,9 +486,10 @@ const HELP = `mkt — dorbar-skills marketplace toolkit
 
   mkt new <name> [--bundle] [--skill <skill>] [--desc "..."]   scaffold a plugin
   mkt sync                                                     regenerate marketplace.json from manifests
-  mkt status                                                   show versions + pending conventional bumps
-  mkt release [--dry-run] [--plugin <name>] [--no-git]         auto-bump (Conventional Commits), sync, tag
-  mkt bump <plugin> <patch|minor|major>                        manual single-plugin bump
+  mkt status                                                   show versions and whether each is tagged
+  mkt lint-title [<title>]                                     check a PR title: <type>(<scope>)!: <summary>
+  mkt version [--title "..."] [--base <ref>] [--check]         versions from the PR title + changed files (--check: CI verify)
+  mkt tag [--push]                                             tag every untagged current version (CI, on main)
   mkt validate                                                 validate manifests + claude plugin validate
   mkt install-hooks                                            install commit-msg conventional-commit lint
   mkt vendor [--diff] | vendor update [--to <sha>]             check vendored files against upstream (vendor.json); --diff shows each fork
@@ -468,8 +500,9 @@ switch (cmd) {
   case "new": cmdNew(rest); break;
   case "sync": syncMarketplace(); break;
   case "status": cmdStatus(); break;
-  case "release": cmdRelease(rest); break;
-  case "bump": cmdBump(rest); break;
+  case "lint-title": cmdLintTitle(rest); break;
+  case "version": cmdVersion(rest); break;
+  case "tag": cmdTag(rest); break;
   case "validate": cmdValidate(); break;
   case "install-hooks": cmdInstallHooks(); break;
   case "vendor": await cmdVendor(rest); break;
