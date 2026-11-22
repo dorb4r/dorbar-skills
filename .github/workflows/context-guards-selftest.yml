@@ -2,13 +2,10 @@
 # fail. Other repos pin this action by commit SHA, so a broken guard is caught here first.
 name: context-guards self-test
 
+# Runs on every PR (no paths filter): it is a required check, and a required check that is
+# skipped by a filter leaves the PR waiting forever. It takes seconds.
 on:
   pull_request:
-    paths:
-      - ".github/actions/context-guards/**"
-      - "plugins/layered-context/skills/layered-context/scripts/**"
-      - "tests/context-guards/**"
-      - ".github/workflows/context-guards-selftest.yml"
 
 permissions:
   contents: read
