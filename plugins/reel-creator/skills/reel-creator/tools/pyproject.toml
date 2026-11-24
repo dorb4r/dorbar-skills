@@ -1,0 +1,13 @@
+[project]
+name = "reel-tools"
+version = "0.1.0"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+  "pycapcut==0.0.4",  # no LICENSE upstream: link + pin only, never vendor
+  "scenedetect[opencv]",
+  "numpy",
+  "soundfile",
+  "pillow>=13.0.0",
+  "pillow-heif>=1.8.1",
+  "python-bidi>=0.6.12",
+]

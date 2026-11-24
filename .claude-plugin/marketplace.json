@@ -5,7 +5,7 @@
     "email": "dor.b4r@gmail.com"
   },
   "description": "Dor Bar's personal marketplace of Claude Code skills, plugins, and hooks shared across projects.",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "plugins": [
     {
       "name": "agent-workflows",
@@ -123,6 +123,33 @@
         "second-brain",
         "notes",
         "planning"
+      ],
+      "license": "MIT"
+    },
+    {
+      "name": "reel-creator",
+      "source": "./plugins/reel-creator",
+      "description": "Idea to finished vertical reel: story, script, shoot plan, music map, CapCut build, review and learning loop, as a layered staged workspace.",
+      "version": "0.1.0",
+      "author": {
+        "name": "Dor Bar",
+        "email": "dor.b4r@gmail.com"
+      },
+      "keywords": [
+        "reels",
+        "short-form-video",
+        "tiktok",
+        "youtube-shorts",
+        "storytelling",
+        "script",
+        "shot-list",
+        "capcut",
+        "pycapcut",
+        "beat-sync",
+        "sound-design",
+        "video-editing",
+        "icm",
+        "layered-context"
       ],
       "license": "MIT"
     },

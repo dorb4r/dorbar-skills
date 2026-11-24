@@ -1,0 +1,26 @@
+{
+  "name": "reel-creator",
+  "version": "0.1.0",
+  "description": "Idea to finished vertical reel: story, script, shoot plan, music map, CapCut build, review and learning loop, as a layered staged workspace.",
+  "author": {
+    "name": "Dor Bar",
+    "email": "dor.b4r@gmail.com"
+  },
+  "license": "MIT",
+  "keywords": [
+    "reels",
+    "short-form-video",
+    "tiktok",
+    "youtube-shorts",
+    "storytelling",
+    "script",
+    "shot-list",
+    "capcut",
+    "pycapcut",
+    "beat-sync",
+    "sound-design",
+    "video-editing",
+    "icm",
+    "layered-context"
+  ]
+}
