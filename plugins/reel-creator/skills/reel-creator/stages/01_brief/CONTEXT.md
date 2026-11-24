@@ -10,8 +10,8 @@ One job: write the reel's brief: goal, audience, sender, one emotion, constraint
 Do NOT load: craft references, examples, other stages, past runs.
 
 ## Process
-1. If the project files are missing, stop: scaffold them from `../../templates/project/` first.
-2. Fill `../../templates/run/01_brief.md` into `{run}/01_brief.md`: goal (one measurable outcome),
+1. If the project files are missing, stop: scaffold them from `templates/project/` (skill root) first.
+2. Fill `templates/run/01_brief.md` (skill root) into `{run}/01_brief.md`: goal (one measurable outcome),
    audience, **who sends it to whom**, **one target emotion**, account, deadline, must-use or
    must-avoid material, consent limits, music limits.
 3. Ask the owner only what the project files don't answer. One question at a time.

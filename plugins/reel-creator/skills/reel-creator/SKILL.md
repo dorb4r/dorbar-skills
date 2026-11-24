@@ -24,7 +24,7 @@ Reels are made in stages, and nothing moves on until a stage's check passes. The
 | `references/` | craft rules: story, formats, hooks, script, shooting, music, sound, editing, CapCut, review, tools |
 | `examples/` | studied reference reels, one lesson each |
 | `templates/project/` | what a project needs: `AGENTS.md`, `references/brand.md`, `references/decisions.md` |
-| `templates/run/` | blank starters for a run's files |
+| `templates/run/` | blank starters for a run's files (NN_check.md files are one line: `pass` or `fail: <why>`) |
 | `tools/` | `build_reel.py`, `capcut_mac.py`, `beatgrid.py`, `reel_breakdown.py` (uv project) |
 | `{project}/runs/<YYYY-MM-DD>-<slug>/` | one reel's working files (in the project, never here) |
 
